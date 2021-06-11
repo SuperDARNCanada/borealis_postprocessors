@@ -32,17 +32,12 @@ BorealisRestructureUtilities
 
 """
 
-import deepdish as dd
 import numpy as np
-import os
-import subprocess as sp
-import sys
 import tables
 import warnings
 
 from collections import OrderedDict
 from datetime import datetime as dt
-from pathlib2 import Path
 from typing import Union, List
 
 from multiprocessing import Manager, Process
