@@ -42,8 +42,8 @@ from typing import Union, List
 
 from multiprocessing import Manager, Process
 
-from pydarn import borealis_exceptions, BorealisRead, BorealisWrite
-from .restructure_borealis import BorealisRestructureUtilities
+from pydarnio import borealis_exceptions, BorealisRead, BorealisWrite
+#from .restructure_borealis import BorealisRestructureUtilities
 
 
 class BorealisBfiqToRawacfPostProcessor():
@@ -165,10 +165,8 @@ class BorealisBfiqToRawacfPostProcessor():
         if self.write_file_structure == 'site':
             rawacf_data = self.rawacf_records
         elif self.write_borealis_structure == 'array':
-            rawacf_data = BorealisRestructureUtilities.borealis_site_to_array_dict(
-                                                        self.rawacf_filename,
-                                                        self.rawacf_records, 
-                                                        'rawacf')
+            rawacf_data = BorealisWrite(self.rawacf_filename, self.rawacf_records, 'rawacf')
+            #BorealisRestructureUtilities.borealis_site_to_array_dict(self.rawacf_filename, self.rawacf_records, 'rawacf')
         else: # unknown structure
             raise BorealisStructureError('Unknown write structure type: {}'\
                 ''.format(borealis_file_structure))

@@ -182,7 +182,7 @@ def update_file(filename, out_file, mode='antennas_iq'):
         # Sanity checks
         if 'main_acfs' in recs[group_name].keys():
             print(recs[group_name]['main_acfs'])
-            print('Why the fuck is this in a bfiq!')
+            print('Why is this in a bfiq!')
             exit()
         write_dict = {}
         write_dict[group_name] = convert_to_numpy(recs[group_name])
