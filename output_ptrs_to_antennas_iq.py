@@ -193,7 +193,7 @@ def ptrs2antiq(filename, fixed_data_dir=''):
         bzip2 = False
 
     out_file = os.path.basename(hdf5_file).split('.')
-    out_file = '.'.join(out_file[0:5]) + '.antennas_iq.hdf5.site2'
+    out_file = '.'.join(out_file[0:5]) + '.antennas_iq.hdf5.site'
 
     if fixed_data_dir == '/':
         out_file = fixed_data_dir + out_file
@@ -208,15 +208,17 @@ def ptrs2antiq(filename, fixed_data_dir=''):
 
 
 if __name__ == '__main__':
-    log_file = '20190920.0000.01.sas.0.antennas_iq.hdf5.site'
-    files = [log_file]
-    #files = batch_log.read_file(log_file)
-    for file in files:
+    log_file = 'antennas_iq_files.txt'
+    #files = [log_file]
+    files = batch_log.read_file(log_file)
+    for file in files[633::]:
+        #print(file)
+        #continue
         #name = os.path.basename(file).split('.')
         #name = '.'.join(name[0:5]) + '.antennas_iq.hdf5.site2'
-        #path = os.path.dirname(file).split('/')
-        #path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1] + '/'
-        ptrs2antiq(file, '')
+        path = os.path.dirname(file).split('/')
+        path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1] + '/'
+        ptrs2antiq(file, path)
 
 
 
