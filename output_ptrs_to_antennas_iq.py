@@ -208,6 +208,10 @@ def ptrs2antiq(filename, fixed_data_dir=''):
 
 
 if __name__ == '__main__':
+    
+    # Todo (Adam): Need to make this tool properly callable from cli and not require a list.txt of
+    #              files made from batch_log.py. Although, this may be a one-off tool.
+    
     log_file = 'antennas_iq_files.txt'
     #files = [log_file]
     files = batch_log.read_file(log_file)
