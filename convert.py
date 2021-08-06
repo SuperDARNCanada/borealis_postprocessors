@@ -164,7 +164,7 @@ def update_file(filename, out_file, mode='antennas_iq'):
                 if key_num == 0:
                     print('blanked_samples added')
             if 'first_range' not in recs[group_name].keys():
-                recs[group_name]['first_range'] = np.float32(0.0)
+                recs[group_name]['first_range'] = np.float32(1200.0)
                 if key_num == 0:
                     print('first_range added')
             lag_table = list(itertools.combinations(recs[group_name]['pulses'], 2))

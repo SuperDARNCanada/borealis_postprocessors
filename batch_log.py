@@ -77,7 +77,7 @@ def write_csv(log_file):
         print(row)
         writer.writerow(row)
 
-    g.close
+    g.close()
     return
 
 

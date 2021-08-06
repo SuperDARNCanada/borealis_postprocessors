@@ -19,7 +19,7 @@ def usage_msg():
 
 def script_parser():
     parser = argparse.ArgumentParser(usage=usage_msg())
-    parser.add_argument("filename", help="Path to the file to be walked.")
+    parser.add_argument('-f', dest="filename", help="Path to the file to be walked.")
 
     return parser
 
