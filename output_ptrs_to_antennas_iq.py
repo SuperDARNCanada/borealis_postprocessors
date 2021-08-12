@@ -98,7 +98,7 @@ def update_file(filename, out_file):
         # num_slices
         check_dataset_add('num_slices', np.int64(1))
         # pulse_phase_offset
-        check_dataset_add('pulse_phase_offset', np.zeros(recs[group_name]['pulses'].shape[0], dtype=np.int))
+        check_dataset_add('pulse_phase_offset', np.zeros(recs[group_name]['pulses'].shape[0], dtype=np.float32))
         # pulses
         # rx_sample_rate
         # sample_data_type

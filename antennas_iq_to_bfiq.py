@@ -208,12 +208,12 @@ def beamform_file(filename, out_file):
         # Find all the bfiq required missing datasets or create them
 
         # first_range
-        first_range = 180  #scf.FIRST_RANGE
-        check_dataset_add('first_range', first_range)
+        first_range = 180.0  #scf.FIRST_RANGE
+        check_dataset_add('first_range', np.float32(first_range))
 
         # first_range_rtt
         first_range_rtt = first_range * 2.0 * 1.0e3 * 1e6 / speed_of_light
-        check_dataset_add('first_range_rtt', first_range_rtt)
+        check_dataset_add('first_range_rtt', np.float32(first_range_rtt))
 
         # lags
         lag_table = list(itertools.combinations(recs[group_name]['pulses'], 2))
@@ -226,14 +226,17 @@ def beamform_file(filename, out_file):
         # num_ranges
         if station_name in ["cly", "rkn", "inv"]:
             num_ranges = 100  # scf.POLARDARN_NUM_RANGES
-            check_dataset_add('num_ranges', num_ranges)
+            check_dataset_add('num_ranges', np.uint32(num_ranges))
         elif station_name in ["sas", "pgr"]:
             num_ranges = 75  # scf.STD_NUM_RANGES
-            check_dataset_add('num_ranges', num_ranges)
+            check_dataset_add('num_ranges', np.uint32(num_ranges))
 
         # range_sep
         range_sep = 1 / recs[group_name]['rx_sample_rate'] * speed_of_light / 1.0e3 / 2.0
-        check_dataset_add('range_sep', range_sep)
+        check_dataset_add('range_sep', np.float32(range_sep))
+
+        # Check pulse_phase_offset type
+        recs[group_name]['pulse_phase_offset'] = np.float32(recs[group_name]['pulse_phase_offset'][()])
 
         # Beamform the data
         main_antenna_spacing = 15.24  # For SAS from config file
@@ -249,7 +252,7 @@ def beamform_file(filename, out_file):
 
         # Loop through every sequence and beamform the data
         # output shape after loop is [num_sequences, num_beams, num_samps]
-        for j in antennas_data.shape[1]:
+        for j in range(antennas_data.shape[1]):
             # data input shape = [num_antennas, num_samps]
             # data return shape = [num_beams, num_samps]
             main_beamformed_data = np.append(main_beamformed_data,
@@ -316,7 +319,7 @@ if __name__ == '__main__':
     # Todo (Adam): Need to make this tool properly callable from cli and not require a list.txt of
     #              files made from batch_log.py. Although, this may be a one-off tool.
 
-    log_file = 'processed_files.txt'
+    log_file = 'processed_antiq_files.txt'
     files = batch_log.read_file(log_file)
     for file in files:
         path = os.path.dirname(file).split('/')
