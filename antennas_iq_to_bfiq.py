@@ -283,11 +283,15 @@ def beamform_file(filename, out_file):
         cmd = 'h5copy -i {newfile} -o {twohr} -s {dtstr} -d {dtstr}'
         cmd = cmd.format(newfile=tmp_file, twohr=out_file + '.tmp', dtstr=group_name)
 
+        # Todo: improve call to subprocess.
+        sp.call(cmd.split())
+        os.remove(tmp_file)
+        print('out_file:', out_file)
+
     bfiq_reader = pydarnio.BorealisRead(tmp_file, 'bfiq', 'site')
     array_data = bfiq_reader.arrays
     bfiq_writer = pydarnio.BorealisWrite(out_file, array_data, 'bfiq', 'array')
 
-    os.remove(tmp_file)
     os.remove(out_file + '.tmp')
 
 
@@ -328,5 +332,5 @@ if __name__ == '__main__':
     files = batch_log.read_file(log_file)
     for file in files:
         path = os.path.dirname(file).split('/')
-        path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1] + '/'
+        path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1]
         antiq2bfiq(file, path)
