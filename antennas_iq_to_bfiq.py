@@ -283,12 +283,11 @@ def beamform_file(filename, out_file):
         cmd = 'h5copy -i {newfile} -o {twohr} -s {dtstr} -d {dtstr}'
         cmd = cmd.format(newfile=tmp_file, twohr=out_file + '.tmp', dtstr=group_name)
 
-        # Todo: improve call to subprocess.
         sp.call(cmd.split())
         os.remove(tmp_file)
-        print('out_file:', out_file)
+        #print('out_file:', out_file)
 
-    bfiq_reader = pydarnio.BorealisRead(tmp_file, 'bfiq', 'site')
+    bfiq_reader = pydarnio.BorealisRead(out_file + '.tmp', 'bfiq', 'site')
     array_data = bfiq_reader.arrays
     bfiq_writer = pydarnio.BorealisWrite(out_file, array_data, 'bfiq', 'array')
 
