@@ -13,6 +13,8 @@ import subprocess as sp
 import numpy as np
 import warnings
 import tables
+import pydarnio
+import batch_log
 
 import deepdish as dd
 from scipy.constants import speed_of_light
@@ -47,7 +49,7 @@ def script_parser():
     return parser
 
 
-def beamform_samples(self, filtered_samples, beam_phases):
+def beamform_samples(filtered_samples, beam_phases):
     """
     Beamform the filtered samples for multiple beams simultaneously.
     :param      filtered_samples:  The filtered input samples.
@@ -57,13 +59,10 @@ def beamform_samples(self, filtered_samples, beam_phases):
     :type       beam_phases:       list
     """
 
-    beam_phases = xp.array(beam_phases)
+    beam_phases = np.array(beam_phases)
+    beamformed_samples = np.einsum('ijk,ilj->ilk', filtered_samples, beam_phases)
 
-    # [num_slices, num_antennas, num_samples]
-    # [num_slices, num_beams, num_antennas]
-    beamformed_samples = xp.einsum('ijk,ilj->ilk', filtered_samples, beam_phases)
-
-    self.beamformed_samples = beamformed_samples
+    return beamformed_samples
 
 
 def beamform(antennas_data, beamdirs, rxfreq, antenna_spacing):
@@ -112,7 +111,6 @@ def get_phshift(beamdir, freq, antenna, pulse_shift, num_antennas, antenna_spaci
      Positive is shifted to the right when looking along boresight (from the ground).
     :returns phshift: a phase shift for the samples for this antenna number, in radians.
     """
-
     freq = freq * 1000.0  # convert to Hz.
 
     beamdir = float(beamdir)
@@ -120,7 +118,7 @@ def get_phshift(beamdir, freq, antenna, pulse_shift, num_antennas, antenna_spaci
     beamrad = math.pi * float(beamdir) / 180.0
 
     # Pointing to right of boresight, use point in middle (hypothetically antenna 7.5) as phshift=0
-    phshift = 2 * math.pi * freq * (((num_antennas-1)/2.0 - antenna) * \
+    phshift = 2 * math.pi * freq * (((num_antennas-1)/2.0 - antenna) *
         antenna_spacing + centre_offset) * math.cos(math.pi / 2.0 - beamrad) \
         / speed_of_light
 
@@ -143,142 +141,184 @@ def shift_samples(basic_samples, phshift, amplitude):
     :returns samples: basic_samples that have been shaped for the antenna for the
      desired beam.
     """
-
-    #samples = [sample * amplitude * np.exp(1j * phshift) for sample in basic_samples]
     samples = amplitude * np.exp(1j * phshift) * basic_samples
+
     return samples
 
 
-def antiq2bfiq(filename):
+def beamform_file(filename, out_file):
     # This is initially designed to only work for the SAS 2019 data fix
+    # Input a antennas_iq.site file, transform to a bfiq.site file, then save as a bfiq.array file.
+    # The last step simply need to convert a temp file to array format using pydarnio then delete the temp.
 
     recs = dd.io.load(filename)
-    data_directory = os.path.dirname(data_file_path)
     data_file_metadata = filename.split('.')
-    date_of_file = data_file_metadata[0]
-    timestamp_of_file = '.'.join(data_file_metadata[0:3])
     station_name = data_file_metadata[3]
-    slice_id_number = data_file_metadata[4]
-    file_suffix = data_file_metadata[-1]
-
     sorted_keys = sorted(list(recs.keys()))
     tmp_file = filename + ".tmp"
+
+    def convert_to_numpy(data):
+        """Converts lists stored in dict into numpy array. Recursive.
+        Args:
+            data (Python dictionary): Dictionary with lists to convert to numpy arrays.
+        """
+        for k, v in data.items():
+            if isinstance(v, dict):
+                convert_to_numpy(v)
+            elif isinstance(v, list):
+                data[k] = np.array(v)
+            else:
+                continue
+        return data
+
+    def check_dataset_add(k, v):
+        if k not in recs[group_name].keys():
+            recs[group_name][k] = v
+            if key_num == 0:
+                print(f'\t- added: {k}')
+
+    def check_dataset_rename(k, v):
+        if k in recs[group_name].keys():
+            recs[group_name][v] = recs[group_name][k]
+            del recs[group_name][k]
+            if key_num == 0:
+                print(f'\t- updated: {k}')
+
+    def check_dataset_del(k):
+        if k in recs[group_name].keys():
+            del recs[group_name][k]
+            if key_num == 0:
+                print(f'\t- removed: {k}')
+
+                if 'timestamp_of_write' in recs[group_name].keys():
+                    del recs[group_name]['timestamp_of_write']
+                    if key_num == 0:
+                        print('timestamp_of_write removed')
+
+    def check_dataset_revalue(k, v):
+        if k in recs[group_name].keys():
+            recs[group_name][k] = v
+            if key_num == 0:
+                print(f'\t- updated: {k}')
 
     # Update the file
     print(f'file: {filename}')
 
     for key_num, group_name in enumerate(sorted_keys):
-        cpid = recs[group_name]['experiment_id']
+        # Find all the bfiq required missing datasets or create them
+
+        # first_range
         first_range = 180  #scf.FIRST_RANGE
+        check_dataset_add('first_range', first_range)
+
+        # first_range_rtt
         first_range_rtt = first_range * 2.0 * 1.0e3 * 1e6 / speed_of_light
+        check_dataset_add('first_range_rtt', first_range_rtt)
+
+        # lags
         lag_table = list(itertools.combinations(recs[group_name]['pulses'], 2))
         lag_table.append([recs[group_name]['pulses'][0], recs[group_name]['pulses'][0]])  # lag 0
         lag_table = sorted(lag_table, key=lambda x: x[1] - x[0])  # sort by lag number
         lag_table.append([recs[group_name]['pulses'][-1], recs[group_name]['pulses'][-1]])  # alternate lag 0
-        recs[group_name]['lags'] = np.array(lag_table, dtype=np.uint32)
+        lags = np.array(lag_table, dtype=np.uint32)
+        check_dataset_add('lags', lags)
+
+        # num_ranges
         if station_name in ["cly", "rkn", "inv"]:
             num_ranges = 100  # scf.POLARDARN_NUM_RANGES
+            check_dataset_add('num_ranges', num_ranges)
         elif station_name in ["sas", "pgr"]:
             num_ranges = 75  # scf.STD_NUM_RANGES
+            check_dataset_add('num_ranges', num_ranges)
+
+        # range_sep
         range_sep = 1 / recs[group_name]['rx_sample_rate'] * speed_of_light / 1.0e3 / 2.0
+        check_dataset_add('range_sep', range_sep)
 
-        # Things I think I need
-        antenna_spacing = float(config['main_antenna_spacing'])
-        intf_antenna_spacing = float(config['interferometer_antenna_spacing'])
+        # Beamform the data
+        main_antenna_spacing = 15.24  # For SAS from config file
+        intf_antenna_spacing = 15.24  # For SAS from config file
+        beam_azms = recs[group_name]['beam_azms'][()]
+        freq = recs[group_name]['freq']
 
-        main_beamformed_data = beamform(antennas_data,
-                                   recs[group_name]['beam_azms'][()],
-                                   recs[group_name]['freq'],
-                                   antenna_spacing)
-        intf_beamformed_data = beamform(antennas_data,
-                                   recs[group_name]['beam_azms'][()],
-                                   recs[group_name]['freq'],
-                                   antenna_spacing)
+        # antennas data shape  = [num_antennas, num_sequences, num_samps]
+        antennas_data = recs[group_name]['data']
+        antennas_data = antennas_data.reshape(recs[group_name]['data_dimensions'])
+        main_beamformed_data = np.array([], dtype=np.complex64)
+        intf_beamformed_data = np.array([], dtype=np.complex64)
 
-    write_dict = {}
-    write_dict[group_name] = convert_to_numpy(recs[group_name])
-    dd.io.save(tmp_file, write_dict, compression=None)
+        # Loop through every sequence and beamform the data
+        # output shape after loop is [num_sequences, num_beams, num_samps]
+        for j in antennas_data.shape[1]:
+            # data input shape = [num_antennas, num_samps]
+            # data return shape = [num_beams, num_samps]
+            main_beamformed_data = np.append(main_beamformed_data,
+                                             beamform(antennas_data[0:16, j, :], beam_azms, freq, main_antenna_spacing))
+            intf_beamformed_data = np.append(intf_beamformed_data,
+                                             beamform(antennas_data[16:20, j, :], beam_azms, freq, intf_antenna_spacing))
 
-    # use external h5copy utility to move new record into 2hr file.
-    cmd = 'h5copy -i {newfile} -o {twohr} -s {dtstr} -d {dtstr}'
-    cmd = cmd.format(newfile=tmp_file, twohr=out_file, dtstr=group_name)
+        # Remove iq data for bfiq data.
+        # Data shape after append is [num_antenna_arrays, num_sequences, num_beams, num_samps]
+        # Then flatten the array for final .site format
+        del recs[group_name]['data']
+        recs[group_name]['data'] = np.append(main_beamformed_data, intf_beamformed_data).flatten()
 
-    # Todo: improve call to subprocess.
-    sp.call(cmd.split())
+        # data_dimensions
+        # We need set num_antennas_arrays=2 for two arrays and num_beams=length of beam_azms
+        recs[group_name]['data_dimensions'][0] = 2
+        recs[group_name]['data_dimensions'][2] = len(beam_azms)
+
+        # NOTE (Adam): After all this we essentially could loop through all records and build the array file live but,
+        # it is just as easy to save the .site format and use pydarnio to reload the data, verify its contents
+        # automatically and then reshape it into .array format (which automatically handles all the zero padding).
+
+        write_dict = {}
+        write_dict[group_name] = convert_to_numpy(recs[group_name])
+        dd.io.save(tmp_file, write_dict, compression=None)
+
+    bfiq_reader = pydarnio.BorealisRead(tmp_file, 'bfiq', 'site')
+    array_data = bfiq_reader.arrays
+    bfiq_writer = pydarnio.BorealisWrite(out_file, array_data, 'bfiq', 'array')
+
     os.remove(tmp_file)
 
 
-    output_samples_filetype = slice_id_number + ".antennas_iq"
-    bfiq_filetype = slice_id_number + ".bfiq"
-    rawrf_filetype = "rawrf"
-    tx_filetype = "txdata"
+def antiq2bfiq(filename, fixed_data_dir=''):
+    """
+    Checks if the file is bz2, decompresses if necessary, and
+    writes to a fixed data directory. If the file was bz2, then the resulting
+    file will also be compressed to bz2.
+    Parameters
+    ----------
+    filename
+        filename to update, can be bz2 compressed
+    fixed_data_dir
+        pathname to put the new file into
+    """
 
-    # Choose a record from the provided file, and get that record for each filetype to analyze side by side.
-    # Also reshaping data to correct dimensions - if there is a problem with reshaping, we will also not use that record.
-    record_data = {}
-    try:
-        record_data[file_type] = data[file_type][record_name]
-        output_samples_iq = record_data[output_samples_filetype]
-        number_of_antennas = len(output_samples_iq['antenna_arrays_order'])
-        flat_data = np.array(output_samples_iq['data'])
-        # reshape to number of antennas (M0..... I3) x nave x number_of_samples
-        output_samples_iq_data = np.reshape(flat_data, (number_of_antennas, output_samples_iq['num_sequences'], output_samples_iq['num_samps']))
-        output_samples_iq['data'] = output_samples_iq_data
-        antennas_present = [int(i.split('_')[-1]) for i in output_samples_iq['antenna_arrays_order']]
-        output_samples_iq['antennas_present'] = antennas_present
+    out_file = os.path.basename(filename).split('.')
+    out_file = '.'.join(out_file[0:5]) + '.bfiq.hdf5.array'
 
-    except ValueError as e:
-        print('Record {} raised an exception in filetype {}:\n'.format(record_name, file_type))
+    if fixed_data_dir == '/':
+        out_file = fixed_data_dir + out_file
+    elif fixed_data_dir == '':
+        out_file = fixed_data_dir + out_file
+    else:
+        out_file = fixed_data_dir + "/" + out_file
 
-    beamforming_dict = {}
-    # print('BEAM AZIMUTHS: {}'.format(beam_azms))
-    for sequence_num in range(0, nave):
-        # print('SEQUENCE NUMBER {}'.format(sequence_num))
-        sequence_dict = beamforming_dict[sequence_num] = {}
-        for filetype, record_dict in record_data.items():
-            print(filetype)
-            sequence_filetype_dict = sequence_dict[filetype] = {}
-            data_description_list = list(record_dict['data_descriptors'])
+    beamform_file(filename, out_file)
 
-            sequence_filetype_dict['decimated_data'] = decimated_data
-
-            # STEP 2: BEAMFORM ANY UNBEAMFORMED DATA
-            if filetype != bfiq_filetype:
-                # need to beamform the data.
-                antenna_list = []
-                # print(decimated_data.shape)
-                if data_description_list == ['num_antennas', 'num_sequences', 'num_samps']:
-                    for antenna in range(0, record_dict['data'].shape[0]):
-                        antenna_list.append(decimated_data[antenna, :])
-                    antenna_list = np.array(antenna_list)
-                elif data_description_list == ['num_sequences', 'num_antennas', 'num_samps']:
-                    for antenna in range(0, record_dict['data'].shape[1]):
-                        antenna_list.append(decimated_data[antenna, :])
-                    antenna_list = np.array(antenna_list)
-                else:
-                    raise Exception('Not sure how to beamform with the dimensions of this data: {}'.format(
-                        record_dict['data_descriptors']))
-
-                # beamform main array antennas only.
-                main_antennas_mask = (record_dict['antennas_present'] < main_antenna_count)
-                intf_antennas_mask = (record_dict['antennas_present'] >= main_antenna_count)
-                decimated_beamformed_data = beamform(antenna_list[main_antennas_mask][:].copy(),
-                                                     beam_azms, freq, antenna_spacing)  # TODO test
-                # without
-                # .copy()
-                intf_decimated_beamformed_data = beamform(antenna_list[intf_antennas_mask][:].copy(),
-                                                          beam_azms, freq, intf_antenna_spacing)
-            # else:
-            #     decimated_beamformed_data = decimated_data
-            #     intf_decimated_beamformed_data = intf_decimated_data
-
-            sequence_filetype_dict['main_bf_data'] = decimated_beamformed_data  # this has 2 dimensions: num_beams x num_samps for this sequence.
-            sequence_filetype_dict['intf_bf_data'] = intf_decimated_beamformed_data
+    return out_file
 
 
 if __name__ == '__main__':
-    parser = testing_parser()
-    args = parser.parse_args()
-    data_file_path = args.filename
-    data_file = os.path.basename(data_file_path)
-    antiq2bfiq(filename)
+
+    # Todo (Adam): Need to make this tool properly callable from cli and not require a list.txt of
+    #              files made from batch_log.py. Although, this may be a one-off tool.
+
+    log_file = 'processed_files.txt'
+    files = batch_log.read_file(log_file)
+    for file in files:
+        path = os.path.dirname(file).split('/')
+        path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1] + '/'
+        antiq2bfiq(file, path)

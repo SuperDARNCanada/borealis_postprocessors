@@ -215,11 +215,7 @@ if __name__ == '__main__':
     log_file = 'antennas_iq_files.txt'
     #files = [log_file]
     files = batch_log.read_file(log_file)
-    for file in files[633::]:
-        #print(file)
-        #continue
-        #name = os.path.basename(file).split('.')
-        #name = '.'.join(name[0:5]) + '.antennas_iq.hdf5.site2'
+    for file in files:
         path = os.path.dirname(file).split('/')
         path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1] + '/'
         ptrs2antiq(file, path)
