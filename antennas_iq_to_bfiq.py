@@ -268,8 +268,8 @@ def beamform_file(filename, out_file):
 
         # data_dimensions
         # We need set num_antennas_arrays=2 for two arrays and num_beams=length of beam_azms
-        recs[group_name]['data_dimensions'][0] = 2
-        recs[group_name]['data_dimensions'][2] = len(beam_azms)
+        data_dimensions = recs[group_name]['data_dimensions']
+        recs[group_name]['data_dimensions'] = np.arrays([2, data_dimensions[1], len(beam_azms), data_dimensions[2]])
 
         # NOTE (Adam): After all this we essentially could loop through all records and build the array file live but,
         # it is just as easy to save the .site format and use pydarnio to reload the data, verify its contents
