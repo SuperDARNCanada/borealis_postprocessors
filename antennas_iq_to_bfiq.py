@@ -285,13 +285,15 @@ def beamform_file(filename, out_file):
 
         sp.call(cmd.split())
         os.remove(tmp_file)
-        #print('out_file:', out_file)
 
     bfiq_reader = pydarnio.BorealisRead(out_file + '.tmp', 'bfiq', 'site')
     array_data = bfiq_reader.arrays
     bfiq_writer = pydarnio.BorealisWrite(out_file, array_data, 'bfiq', 'array')
 
     os.remove(out_file + '.tmp')
+    print('out_file:', out_file)
+
+    return
 
 
 def antiq2bfiq(filename, fixed_data_dir=''):
