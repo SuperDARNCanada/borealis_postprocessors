@@ -269,7 +269,7 @@ def beamform_file(filename, out_file):
         # data_dimensions
         # We need set num_antennas_arrays=2 for two arrays and num_beams=length of beam_azms
         data_dimensions = recs[group_name]['data_dimensions']
-        recs[group_name]['data_dimensions'] = np.array([2, data_dimensions[1], len(beam_azms), data_dimensions[2]])
+        recs[group_name]['data_dimensions'] = np.array([2, data_dimensions[1], len(beam_azms), data_dimensions[2]], dtype=np.uint32)
 
         # NOTE (Adam): After all this we essentially could loop through all records and build the array file live but,
         # it is just as easy to save the .site format and use pydarnio to reload the data, verify its contents
@@ -279,11 +279,16 @@ def beamform_file(filename, out_file):
         write_dict[group_name] = convert_to_numpy(recs[group_name])
         dd.io.save(tmp_file, write_dict, compression=None)
 
+        # use external h5copy utility to move new record into 2hr file.
+        cmd = 'h5copy -i {newfile} -o {twohr} -s {dtstr} -d {dtstr}'
+        cmd = cmd.format(newfile=tmp_file, twohr=out_file + '.tmp', dtstr=group_name)
+
     bfiq_reader = pydarnio.BorealisRead(tmp_file, 'bfiq', 'site')
     array_data = bfiq_reader.arrays
     bfiq_writer = pydarnio.BorealisWrite(out_file, array_data, 'bfiq', 'array')
 
     os.remove(tmp_file)
+    os.remove(out_file + '.tmp')
 
 
 def antiq2bfiq(filename, fixed_data_dir=''):
