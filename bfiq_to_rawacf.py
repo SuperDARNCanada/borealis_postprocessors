@@ -1,6 +1,10 @@
-# Copyright 2019 SuperDARN Canada, University of Saskatchewan
-# Authors: Liam Graham, Marci Detwiller
 """
+SuperDARN Canada© -- Borealis Processing Tools Kit: (Raw ACF processing from bfiq)
+
+Author: Adam Lozinsky
+Date: October 22, 2021
+Affiliation: University of Saskatchewan
+
 This file contains a function for processing beam-formed IQ data into rawacf
 data product matching the real-time product produced by datawrite module in 
 Borealis.
@@ -164,8 +168,9 @@ class Bfiq2Rawacf():
         #exit()
         
         #print('2', self.write_file_structure, write_file_structure)
-        self.rawacf_records = self.__convert_bfiq_records_to_rawacf_records()
-        
+        # self.rawacf_records = self.__convert_bfiq_records_to_rawacf_records()
+        self.rawacf_records = self.__myfunc()
+
         # Testing to see if the data is correct
         #inkeys = list(self.bfiq_records.keys())
         #for inkey in inkeys:
@@ -191,9 +196,9 @@ class Bfiq2Rawacf():
         #else: # unknown structure
         #    raise BorealisStructureError('Unknown write structure type: {}'\
         #        ''.format(borealis_file_structure))
-        #arr = rawacf_data#.borealis_file_structure
-        #print(arr)
-        #self.rawacf_writer = BorealisWrite(self.rawacf_filename, rawacf_data, 'rawacf', 'array')
+        arr = rawacf_data.arrays
+        os.remove(self.rawacf_filename+'.tmp')
+        BorealisWrite(self.rawacf_filename, arr, 'rawacf', 'array')
 
     @property
     def num_processes(self):
@@ -322,7 +327,7 @@ class Bfiq2Rawacf():
         # END def correlate_samples(time_stamped_dict)
         return main_acfs, interferometer_acfs, xcfs
 
-    def __convert_record(self, record_key, rawacf):
+    def __convert_record(self, record_key):
         """
         Convert a bfiq_record record.
 
@@ -383,10 +388,12 @@ class Bfiq2Rawacf():
 
     def __myfunc(self):
         record_names = sorted(list(self.bfiq_records.keys()))
-        rawacf_dict = dict()
-        for record_key in record_names:
-            rawacf_dict[record_key] = dict()
-            self.__convert_record(record_key, rawacf_dict[record_key])
+        self.rawacf_dict = dict()
+        for record_key in record_names[0:4]:
+            self.rawacf_dict[record_key] = dict()
+            self.__convert_record(record_key)
+        rawacf_records = OrderedDict(sorted(self.rawacf_dict.items()))
+        return rawacf_records
 
 
     def __convert_bfiq_records_to_rawacf_records(self) -> \
@@ -446,29 +453,29 @@ class Bfiq2Rawacf():
 
 
 if __name__ == '__main__':
-
+    Bfiq2Rawacf('20190827.0200.01.sas.1.bfiq.hdf5.array', 'tmp.hdf5', 'array', 'array', 4)
     # Todo (Adam): Need to make this tool properly callable from cli and not require a list.txt of
     #              files made from batch_log.py. Although, this may be a one-off tool.
     import h5py
     # log_file = 'antiq2bfiq_files.txt'
     # log_file = 'processed_antiq_files.txt'
-    log_file = 'processed_bfiq_files.txt'
-    files = batch_log.read_file(log_file)
-    for file in files[666::]:
-        path = os.path.dirname(file).split('/')
-        path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1] + '/'
-        out_file = os.path.basename(file).split('.')
-        out_file = '.'.join(out_file[0:5]) + '.rawacf.hdf5.array'
-        out_file = path + out_file
-        print(file, '\n\t-->', out_file)
-        # exit()
-        # f = h5py.File(file, 'r')
-        # keys = list(f.keys())
-        # group = keys[0]
-        # print(file, f[group].attrs['num_samps'], f[group]['data_dimensions'][()])
-        # print(f.attrs['num_samps'])
-        # exit()
-        Bfiq2Rawacf(file, out_file, 'array', 'array', 4)
-        print('\tcompleted')
+    # log_file = 'processed_bfiq_files.txt'
+    # files = batch_log.read_file(log_file)
+    # for file in files[666::]:
+    #     path = os.path.dirname(file).split('/')
+    #     path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1] + '/'
+    #     out_file = os.path.basename(file).split('.')
+    #     out_file = '.'.join(out_file[0:5]) + '.rawacf.hdf5.array'
+    #     out_file = path + out_file
+    #     print(file, '\n\t-->', out_file)
+    #     # exit()
+    #     # f = h5py.File(file, 'r')
+    #     # keys = list(f.keys())
+    #     # group = keys[0]
+    #     # print(file, f[group].attrs['num_samps'], f[group]['data_dimensions'][()])
+    #     # print(f.attrs['num_samps'])
+    #     # exit()
+    #     Bfiq2Rawacf(file, out_file, 'array', 'array', 4)
+    #     print('\tcompleted')
 
 
