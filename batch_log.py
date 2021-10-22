@@ -82,12 +82,13 @@ def write_csv(log_file):
 
 
 if __name__ == "__main__":
-    write_csv('output_ptrs_files.txt')
+    #write_csv('output_ptrs_files.txt')
     #check_keys('output_ptrs_files.txt')
-    exit()
+    #exit()
 
-    directory = '/data/borealis_site_data/sas_2019_antennas_iq/'
-    
+    #directory = '/data/borealis_site_data/sas_2019_antennas_iq/'
+    directory = '/data/borealis_site_data/sas_2019_processed/'
+
     filepaths, filenames = batch_files(directory)
     
     antennas_iq_files = []
@@ -108,8 +109,8 @@ if __name__ == "__main__":
         else:
             other_files.append(filepaths[i] + '/' + filenames[i])
 
-    write_file(antennas_iq_files, 'antennas_iq_files.txt')
-    write_file(bfiq_files, 'bfiq_files.txt')
-    write_file(rawacf_files, 'rawacf_files.txt')
-    write_file(output_ptrs_files, 'output_ptrs_files.txt')
-    write_file(other_files, 'other_files.txt')
+    #write_file(antennas_iq_files, 'antennas_iq_files.txt')
+    write_file(bfiq_files, 'processed_bfiq_files.txt')
+    #write_file(rawacf_files, 'rawacf_files.txt')
+    #write_file(output_ptrs_files, 'output_ptrs_files.txt')
+    #write_file(other_files, 'other_files.txt')

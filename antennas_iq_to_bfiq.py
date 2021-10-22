@@ -329,7 +329,7 @@ if __name__ == '__main__':
 
     log_file = 'processed_antiq_files.txt'
     files = batch_log.read_file(log_file)
-    for file in files:
+    for file in files[967::]:
         path = os.path.dirname(file).split('/')
         path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1]
         antiq2bfiq(file, path)

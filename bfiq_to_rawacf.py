@@ -31,22 +31,25 @@ See Also
 BorealisRestructureUtilities
 
 """
+import batch_log
+import os
 
 import numpy as np
 import tables
 import warnings
 
+from functools import partial
 from collections import OrderedDict
 from datetime import datetime as dt
 from typing import Union, List
 
-from multiprocessing import Manager, Process
+from multiprocessing import Manager, Process, Pool
 
 from pydarnio import borealis_exceptions, BorealisRead, BorealisWrite
 #from .restructure_borealis import BorealisRestructureUtilities
 
 
-class BorealisBfiqToRawacfPostProcessor():
+class Bfiq2Rawacf():
     """
     Class for converting bfiq data into rawacf data. 
 
@@ -139,7 +142,7 @@ class BorealisBfiqToRawacfPostProcessor():
         self.rawacf_filename = rawacf_filename
 
         self.write_file_structure = write_file_structure
-
+        #print('1', self.write_file_structure, write_file_structure)
         self.__num_processes = num_processes
 
         if 'hdf5_compression' in kwargs.keys():
@@ -153,28 +156,44 @@ class BorealisBfiqToRawacfPostProcessor():
         warnings.simplefilter('ignore', tables.NaturalNameWarning)
 
         # get the records from the bfiq file
-        self.bfiq_reader = BorealisRead(self.bfiq_filename, 'bfiq', 
-                                   borealis_file_structure=read_file_structure)
-
+        self.bfiq_reader = BorealisRead(self.bfiq_filename, 'bfiq', borealis_file_structure=read_file_structure)
         self.read_file_structure = self.bfiq_reader.borealis_file_structure
         self.bfiq_records = self.bfiq_reader.records
-
-        self.rawacf_records = \
-            self.__convert_bfiq_records_to_rawacf_records()
-
-        if self.write_file_structure == 'site':
-            rawacf_data = self.rawacf_records
-        elif self.write_borealis_structure == 'array':
-            rawacf_data = BorealisWrite(self.rawacf_filename, self.rawacf_records, 'rawacf')
-            #BorealisRestructureUtilities.borealis_site_to_array_dict(self.rawacf_filename, self.rawacf_records, 'rawacf')
-        else: # unknown structure
-            raise BorealisStructureError('Unknown write structure type: {}'\
-                ''.format(borealis_file_structure))
-
-        self.rawacf_writer = BorealisWrite(self.rawacf_filename, rawacf_data, 
-                            'rawacf',
-                            borealis_file_structure=self.write_borealis_structure,
-                            **kwargs)
+        #print(self.read_file_structure)
+        #print(self.bfiq_reader.arrays)
+        #exit()
+        
+        #print('2', self.write_file_structure, write_file_structure)
+        self.rawacf_records = self.__convert_bfiq_records_to_rawacf_records()
+        
+        # Testing to see if the data is correct
+        #inkeys = list(self.bfiq_records.keys())
+        #for inkey in inkeys:
+        #    bhash = self.bfiq_records[inkey]['borealis_git_hash']
+        #    print(bhash)
+        #print('in hash:', bhash)
+        print('Testing area-----------------------------------')
+        #print(self.rawacf_records)
+        okeys = list(self.rawacf_records.keys())
+        for okey in okeys:
+            print(self.rawacf_records[okey].keys())
+        #print(self.rawacf_filename)
+        #print('git hash:', self.rawacf_records['1566871201256']['borealis_git_hash'])
+        #print('3', self.write_borealis_structure, write_file_structure)
+        # Something happend where self.write_... disappears
+        #if self.write_file_structure == 'site':
+        #    rawacf_data = self.rawacf_records
+        #elif self.write_borealis_structure == 'array':
+        
+        
+        rawacf_data = BorealisWrite(self.rawacf_filename+'.tmp', self.rawacf_records, 'rawacf', 'site')
+        #BorealisRestructureUtilities.borealis_site_to_array_dict(self.rawacf_filename, self.rawacf_records, 'rawacf')
+        #else: # unknown structure
+        #    raise BorealisStructureError('Unknown write structure type: {}'\
+        #        ''.format(borealis_file_structure))
+        #arr = rawacf_data#.borealis_file_structure
+        #print(arr)
+        #self.rawacf_writer = BorealisWrite(self.rawacf_filename, rawacf_data, 'rawacf', 'array')
 
     @property
     def num_processes(self):
@@ -216,7 +235,9 @@ class BorealisBfiqToRawacfPostProcessor():
         num_slices = time_stamped_dict["num_slices"]
         
         data_mat = data_buff.reshape(dims)
-
+        #print('ranges:', num_ranges, time_stamped_dict['freq'], num_samples) 
+        #print('data dimesnion:', num_ant_arrays, num_sequences, num_beams, num_samples)
+        
         # Get data from each antenna array (main and interferometer)
         main_data = data_mat[0][:][:][:]
         interferometer_data = data_mat[1][:][:][:]
@@ -224,6 +245,8 @@ class BorealisBfiqToRawacfPostProcessor():
         # Preallocate arrays for correlation results
         main_corrs = np.zeros((num_sequences, num_beams, num_samples, 
                               num_samples), dtype=np.complex64)
+        #print(main_corrs.shape)
+        #exit()
         interferometer_corrs = np.zeros((num_sequences, num_beams, num_samples, 
                               num_samples), dtype=np.complex64)
         cross_corrs = np.zeros((num_sequences, num_beams, num_samples, 
@@ -246,16 +269,14 @@ class BorealisBfiqToRawacfPostProcessor():
 
                 main_corrs[seq, beam] = np.outer(main_samples.conjugate(), 
                                                  main_samples)
-                interferometer_corrs[seq, beam] = np.outer(
-                    interferometer_samples.conjugate(), 
-                    interferometer_samples)
+                interferometer_corrs[seq, beam] = np.outer(interferometer_samples.conjugate(), interferometer_samples)
                 cross_corrs[seq, beam] = np.outer(main_samples.conjugate(), 
                                                   interferometer_samples)
 
                 beam_offset = num_beams * num_ranges * num_lags
                 first_range_offset = int(time_stamped_dict["first_range"] / 
                                          time_stamped_dict["range_sep"])
-
+                #print('first range offset:', time_stamped_dict["first_range"], time_stamped_dict["range_sep"], num_ranges)
                 # Select out the lags for each range gate
                 main_small = np.zeros((num_ranges, num_lags,), 
                                       dtype=np.complex64)
@@ -263,32 +284,30 @@ class BorealisBfiqToRawacfPostProcessor():
                                       dtype=np.complex64)
                 cross_small = np.zeros((num_ranges, num_lags,), 
                                        dtype=np.complex64)
-
+                #print('lags:', lags)
                 # Retrieve the correlation info needed according to 
                 # range and lag information given. The whole array
                 # will not be kept.
+                # Todo (Adam): Need to use a try statement to catch ranges being assigned a number larger than available.
                 for rng in range(num_ranges):
                     for lag in range(num_lags):
                         # tau spacing in us, sample rate in hz
-                        tau_in_samples = np.ceil(
-                                          time_stamped_dict["tau_spacing"] * 
-                                          1e-6 * 
-                                          time_stamped_dict["rx_sample_rate"])
+                        tau_in_samples = np.ceil(time_stamped_dict["tau_spacing"] * 1e-6 * time_stamped_dict["rx_sample_rate"])
+                        # print('tau:', time_stamped_dict['tau_spacing'], 1e-6, time_stamped_dict['rx_sample_rate'])
+                        
                         # pulse 1 and pulse 2 offsets
                         p1_offset = lags[lag, 0] * tau_in_samples
                         p2_offset = lags[lag, 1] * tau_in_samples
                         
                         row_offset = int(rng + first_range_offset + p1_offset)
                         col_offset = int(rng + first_range_offset + p2_offset)
-
+                        
                         # small array is for this sequence and beam only.
-                        main_small[rng, lag] = \
-                            main_corrs[seq, beam, row_offset, col_offset]
-                        interferometer_small[rng, lag] = \
-                            interferometer_corrs[seq, beam, row_offset, 
-                                                 col_offset]
-                        cross_small[rng, lag] = \
-                            cross_corrs[seq, beam, row_offset, col_offset]
+                        #if col_offset >= 292:
+                        #    print('main_corrs shape:', col_offset, rng, first_range_offset, p2_offset, lags[lag, 1], tau_in_samples, main_corrs.shape)
+                        main_small[rng, lag] = main_corrs[seq, beam, row_offset, col_offset]
+                        interferometer_small[rng, lag] = interferometer_corrs[seq, beam, row_offset, col_offset]
+                        cross_small[rng, lag] = cross_corrs[seq, beam, row_offset, col_offset]
 
                 # replace full correlation matrix with resized range-lag matrix
                 main_acfs[seq, beam] = main_small
@@ -317,7 +336,6 @@ class BorealisBfiqToRawacfPostProcessor():
             of all records.
         """
         # write common dictionary fields first
-
         bfiq_rawacf_shared_fields = ['beam_azms', 'beam_nums', 
             'blanked_samples', 'lags', 'noise_at_freq', 'pulses', 
             'sqn_timestamps', 'borealis_git_hash', 'data_normalization_factor',
@@ -332,7 +350,9 @@ class BorealisBfiqToRawacfPostProcessor():
 
         for f in bfiq_rawacf_shared_fields:
             rawacf_record[f] = self.bfiq_records[record_key][f]
-
+            #print(f, rawacf_record[f])
+        
+        # print('does this work:', rawacf_record)
         # Perform correlations and write to dictionary
         # Main array autocorrelations, interferometer autocorrelations,
         # and cross-correlations between arrays.
@@ -352,12 +372,22 @@ class BorealisBfiqToRawacfPostProcessor():
         now = dt.now()
         date_str = now.strftime("%Y-%m-%d")
         time_str = now.strftime("%H:%M")
-        rawacf_record["experiment_comment"] += "File generated on " + \
+        comment = self.bfiq_records[record_key]['experiment_comment']
+        rawacf_record["experiment_comment"] = np.unicode_(comment + ": File generated on " + \
             date_str + " at " + time_str + " from " + self.bfiq_filename + \
-            " via pydarn BorealisBfiqToRawacfPostProcessor"
+            " via pydarn BorealisBfiqToRawacfPostProcessor")
 
         # reassign to this managed dict to notify the proxy
-        rawacf = rawacf_record
+        self.rawacf_dict[record_key] = rawacf_record
+        #print('computed acfs:', rawacf_record['main_acfs'])
+
+    def __myfunc(self):
+        record_names = sorted(list(self.bfiq_records.keys()))
+        rawacf_dict = dict()
+        for record_key in record_names:
+            rawacf_dict[record_key] = dict()
+            self.__convert_record(record_key, rawacf_dict[record_key])
+
 
     def __convert_bfiq_records_to_rawacf_records(self) -> \
             OrderedDict:
@@ -377,16 +407,20 @@ class BorealisBfiqToRawacfPostProcessor():
         """
         # parallelization
         manager = Manager()
-        rawacf_dict = manager.dict()
+        self.rawacf_dict = manager.dict()
         jobs = []
-        
+
         record_names = sorted(list(self.bfiq_records.keys()))
+        record_names = record_names[0:10]
+
 
         for record_key in record_names:
-            rawacf_dict[record_key] = dict()
+            self.rawacf_dict[record_key] = dict()
 
         records_left = True
         record_index = 0
+        
+        #pool = Pool(self.num_processes)  # new
         while records_left:
             for procnum in range(self.num_processes):
                 try:
@@ -394,15 +428,47 @@ class BorealisBfiqToRawacfPostProcessor():
                 except IndexError:
                     records_left = False
                     break
-                p = Process(target=self.__convert_record, args=(record_key, rawacf_dict[record_key]))
+                #pool.map(self.__convert_record, (record_key, rawacf_dict[record_key]))  # new
+                print(record_key)
+                p = Process(target=self.__convert_record, args=(record_key, self.rawacf_dict[record_key]))
                 jobs.append(p)
                 p.start()
 
             for proc in jobs:
                 proc.join()
-
+            
+            # print('record index:', record_index, self.num_processes, len(jobs))
             record_index += self.num_processes
-
-        rawacf_records = OrderedDict(sorted(rawacf_dict.items()))
-
+        #print('asdasdas', self.rawacf_dict)
+        rawacf_records = OrderedDict(sorted(self.rawacf_dict.items()))
+        #print('when does this print?')
         return rawacf_records
+
+
+if __name__ == '__main__':
+
+    # Todo (Adam): Need to make this tool properly callable from cli and not require a list.txt of
+    #              files made from batch_log.py. Although, this may be a one-off tool.
+    import h5py
+    # log_file = 'antiq2bfiq_files.txt'
+    # log_file = 'processed_antiq_files.txt'
+    log_file = 'processed_bfiq_files.txt'
+    files = batch_log.read_file(log_file)
+    for file in files[666::]:
+        path = os.path.dirname(file).split('/')
+        path = '/'.join(path[0:-2]) + '/sas_2019_processed/' + path[-1] + '/'
+        out_file = os.path.basename(file).split('.')
+        out_file = '.'.join(out_file[0:5]) + '.rawacf.hdf5.array'
+        out_file = path + out_file
+        print(file, '\n\t-->', out_file)
+        # exit()
+        # f = h5py.File(file, 'r')
+        # keys = list(f.keys())
+        # group = keys[0]
+        # print(file, f[group].attrs['num_samps'], f[group]['data_dimensions'][()])
+        # print(f.attrs['num_samps'])
+        # exit()
+        Bfiq2Rawacf(file, out_file, 'array', 'array', 4)
+        print('\tcompleted')
+
+
