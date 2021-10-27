@@ -7,9 +7,7 @@ SuperDARN data files.
 
 
 import os
-
 import pydarnio
-
 from exceptions import conversion_exceptions
 
 SUPPORTED_FILE_TYPES = [
