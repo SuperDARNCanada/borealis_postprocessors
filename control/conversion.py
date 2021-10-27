@@ -129,13 +129,6 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                              valid=FILE_STRUCTURE_MAPPING[final_type])
         )
 
-    if file_structure == 'dmap' and final_structure != 'dmap':
-        raise conversion_exceptions.ConversionUpstreamError(
-            'Cannot convert upstream from dmap structure to {} '
-            'structure. Dmap format can only be the final file '
-            'structure.'.format(final_structure)
-        )
-
     if file_type == final_type and file_structure == final_structure:
         raise conversion_exceptions.NoConversionNecessaryError(
             'Desired output format is same as input format.'
@@ -145,3 +138,36 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
         raise conversion_exceptions.FileDoesNotExistError(
             'Input file {}'.format(filename)
         )
+
+    # No downstream processing, only sideways conversion
+    if file_type == final_type:
+        if file_structure == 'dmap':
+            raise conversion_exceptions.ConversionUpstreamError(
+                'Cannot convert upstream from dmap structure. '
+                'Dmap format can only be the final file '
+                'structure.'
+            )
+        # Write the data to SuperDARN DMap file
+        if final_structure == 'dmap':
+            converter = pydarnio.BorealisConvert(filename,
+                                                 file_type,
+                                                 output_file,
+                                                 0,
+                                                 borealis_file_structure=file_structure)
+        # Converting between Borealis file structures
+        else:
+            reader = pydarnio.BorealisRead(filename,
+                                           file_type,
+                                           file_structure)
+            if file_structure == 'array':
+                data = reader.arrays
+            else:   # site structured
+                data = reader.records
+            writer = pydarnio.BorealisWrite(output_file,
+                                            data,
+                                            final_type,
+                                            final_structure)
+    # Downstream processing necessary
+    else:
+        # TODO: Implement downstream processing
+        pass
