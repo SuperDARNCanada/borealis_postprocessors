@@ -7,6 +7,7 @@ SuperDARN data files.
 
 
 import os
+from exceptions import conversion_exceptions
 
 
 FILE_TYPE_MAPPING = {
@@ -52,16 +53,20 @@ def convert_file(filename: str, file_type: str, final_type: str,
             above.
     """
     if file_type not in ['antennas_iq', 'bfiq', 'rawacf']:
-        # TODO: Raise exception here
-        return
+        raise conversion_exceptions.ImproperFileTypeError(
+            'Input file type {} not supported.'
+            ''.format(file_type)
+        )
 
     if file_structure not in ['array', 'site', 'dmap']:
         # TODO: Raise exception here
         return
 
     if final_type not in ['antennas_iq', 'bfiq', 'rawacf']:
-        # TODO: Raise exception here
-        return
+        raise conversion_exceptions.ImproperFileTypeError(
+            'Output file type {} not supported.'
+            ''.format(final_type)
+        )
 
     if final_structure not in ['array', 'site', 'dmap']:
         # TODO: Raise exception here
@@ -71,7 +76,14 @@ def convert_file(filename: str, file_type: str, final_type: str,
         # TODO: Raise exception here
         return
     
-    if final_structure not in FILE_TYPE_MAPPING[final_type]:
+    if final_type not in FILE_TYPE_MAPPING[final_type]:
+        raise conversion_exceptions.ConversionUpstreamError(
+            'Conversion from {filetype} to {final_type} is '
+            'not supported. Only downstream processing is '
+            'possible.'.format(filetype=file_type, final_type=final_type)
+        )
+
+    if final_structure not in FILE_STRUCTURE_MAPPING[final_type]:
         # TODO: Raise exception here
         return
 
