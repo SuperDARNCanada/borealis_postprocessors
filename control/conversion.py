@@ -119,6 +119,11 @@ def convert_file(filename: str, file_type: str, final_type: str,
                              valid=FILE_STRUCTURE_MAPPING[final_type])
         )
 
+    if file_type == final_type and file_structure == final_structure:
+        raise conversion_exceptions.NoConversionNecessaryError(
+            'Desired output format is same as input format.'
+        )
+
     if not os.path.isfile(filename):
         # TODO: Raise exception here
         return

@@ -9,6 +9,33 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
+class NoConversionNecessaryError(Exception):
+    """
+    Raised when the file types and structures specified
+    are the same for input and output files.
+
+    Parameters
+    ----------
+    error_str: str
+        explanation for why the error was raised.
+
+    Attributes
+    ----------
+    message: str
+        The message to display with the error
+
+    See Also
+    --------
+    conversion.py
+    """
+
+    def __init__(self, error_str: str):
+        self.message = "File type and structure are identical: "\
+            "{error_str}".format(error_str=error_str)
+        postprocessing_logger.error(self.message)
+        Exception.__init__(self, self.message)
+
+
 class ImproperFileStructureError(Exception):
     """
     Raised when the file structure is not a valid structure
