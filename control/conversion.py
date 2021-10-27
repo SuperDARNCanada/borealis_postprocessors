@@ -7,6 +7,9 @@ SuperDARN data files.
 
 
 import os
+
+import pydarnio
+
 from exceptions import conversion_exceptions
 
 SUPPORTED_FILE_TYPES = [
@@ -39,7 +42,7 @@ FILE_STRUCTURE_MAPPING = {
 }
 
 
-def convert_file(filename: str, file_type: str, final_type: str,
+def convert_file(filename: str, output_file: str, file_type: str, final_type: str,
                  file_structure: str = 'array', final_structure: str = 'array'):
     """
     Reads a SuperDARN data file, and converts it to the desired file
@@ -49,6 +52,8 @@ def convert_file(filename: str, file_type: str, final_type: str,
     ----------
         filename: str
             file name containing SuperDARN data.
+        output_file: str
+            file name of output file
         file_type: str
             Type of data file. Types include:
             'antennas_iq'
@@ -122,6 +127,13 @@ def convert_file(filename: str, file_type: str, final_type: str,
             '{valid}'.format(structure=final_structure,
                              type=final_type,
                              valid=FILE_STRUCTURE_MAPPING[final_type])
+        )
+
+    if file_structure == 'dmap' and final_structure != 'dmap':
+        raise conversion_exceptions.ConversionUpstreamError(
+            'Cannot convert upstream from dmap structure to {} '
+            'structure. Dmap format can only be the final file '
+            'structure.'.format(final_structure)
         )
 
     if file_type == final_type and file_structure == final_structure:
