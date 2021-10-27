@@ -149,11 +149,11 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
             )
         # Write the data to SuperDARN DMap file
         if final_structure == 'dmap':
-            converter = pydarnio.BorealisConvert(filename,
-                                                 file_type,
-                                                 output_file,
-                                                 0,
-                                                 borealis_file_structure=file_structure)
+            pydarnio.BorealisConvert(filename,
+                                     file_type,
+                                     output_file,
+                                     0,     # Slice ID. TODO: Handle automatic parsing of this value from filename
+                                     borealis_file_structure=file_structure)
         # Converting between Borealis file structures
         else:
             reader = pydarnio.BorealisRead(filename,
@@ -163,10 +163,10 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                 data = reader.arrays
             else:   # site structured
                 data = reader.records
-            writer = pydarnio.BorealisWrite(output_file,
-                                            data,
-                                            final_type,
-                                            final_structure)
+            pydarnio.BorealisWrite(output_file,
+                                   data,
+                                   final_type,
+                                   final_structure)
     # Downstream processing necessary
     else:
         # TODO: Implement downstream processing
