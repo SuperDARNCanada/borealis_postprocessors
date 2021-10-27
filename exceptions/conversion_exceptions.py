@@ -9,16 +9,42 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
+class ImproperFileStructureError(Exception):
+    """
+    Raised when the file structure is not a valid structure
+    for the SuperDARN data file type.
+
+    Parameters
+    ----------
+    error_str: str
+        explanation for why the error was raised.
+
+    Attributes
+    ----------
+    message: str
+        The message to display with the error
+
+    See Also
+    --------
+    conversion.py
+    """
+
+    def __init__(self, error_str: str):
+        self.message = "File structure is not a valid "\
+            "SuperDARN data file structure: {error_str}"\
+            "".format(error_str=error_str)
+        postprocessing_logger.error(self.message)
+        Exception.__init__(self, self.message)
+
+
 class ImproperFileTypeError(Exception):
     """
     Raised when the file type is not a valid SuperDARN data file type.
 
     Parameters
     ----------
-    file_type: str
-        file type which is not supported.
     error_str: str
-        explanation for why the file cannot be converted.
+        explanation for error was raised.
 
     Attributes
     ----------
