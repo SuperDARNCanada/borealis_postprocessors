@@ -37,7 +37,7 @@ BorealisRestructureUtilities
 """
 import batch_log
 import os
-
+import time
 import numpy as np
 import tables
 import warnings
@@ -177,11 +177,11 @@ class Bfiq2Rawacf():
         #    bhash = self.bfiq_records[inkey]['borealis_git_hash']
         #    print(bhash)
         #print('in hash:', bhash)
-        print('Testing area-----------------------------------')
+        # print('Testing area-----------------------------------')
         #print(self.rawacf_records)
-        okeys = list(self.rawacf_records.keys())
-        for okey in okeys:
-            print(self.rawacf_records[okey].keys())
+        # okeys = list(self.rawacf_records.keys())
+        # for okey in okeys:
+            # print(self.rawacf_records[okey].keys())
         #print(self.rawacf_filename)
         #print('git hash:', self.rawacf_records['1566871201256']['borealis_git_hash'])
         #print('3', self.write_borealis_structure, write_file_structure)
@@ -199,6 +199,7 @@ class Bfiq2Rawacf():
         arr = rawacf_data.arrays
         os.remove(self.rawacf_filename+'.tmp')
         BorealisWrite(self.rawacf_filename, arr, 'rawacf', 'array')
+        print('file created:', self.rawacf_filename)
 
     @property
     def num_processes(self):
@@ -389,7 +390,7 @@ class Bfiq2Rawacf():
     def __myfunc(self):
         record_names = sorted(list(self.bfiq_records.keys()))
         self.rawacf_dict = dict()
-        for record_key in record_names[0:4]:
+        for record_key in record_names:
             self.rawacf_dict[record_key] = dict()
             self.__convert_record(record_key)
         rawacf_records = OrderedDict(sorted(self.rawacf_dict.items()))
@@ -453,7 +454,11 @@ class Bfiq2Rawacf():
 
 
 if __name__ == '__main__':
+    st = time.time()
     Bfiq2Rawacf('20190827.0200.01.sas.1.bfiq.hdf5.array', 'tmp.hdf5', 'array', 'array', 4)
+    en = time.time()
+    print(f'elapsed time: {en - st}')
+
     # Todo (Adam): Need to make this tool properly callable from cli and not require a list.txt of
     #              files made from batch_log.py. Although, this may be a one-off tool.
     import h5py
