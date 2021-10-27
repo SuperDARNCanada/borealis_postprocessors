@@ -21,12 +21,17 @@ SUPPORTED_FILE_STRUCTURES = [
     'rawacf'
 ]
 
+# Keys are valid input file types, values are lists of allowed
+# output file types. A file of type 'key' can be processed into
+# any type in 'value'.
 FILE_TYPE_MAPPING = {
     'antennas_iq': ['antennas_iq', 'bfiq', 'rawacf'],
     'bfiq': ['bfiq', 'rawacf'],
     'rawacf': ['rawacf']
 }
 
+# Keys are valid input file types, and values are lists of
+# supported file structures for the file type.
 FILE_STRUCTURE_MAPPING = {
     'antennas_iq': ['site', 'array'],
     'bfiq': ['site', 'array'],
@@ -125,5 +130,6 @@ def convert_file(filename: str, file_type: str, final_type: str,
         )
 
     if not os.path.isfile(filename):
-        # TODO: Raise exception here
-        return
+        raise conversion_exceptions.FileDoesNotExistError(
+            'Input file {}'.format(filename)
+        )
