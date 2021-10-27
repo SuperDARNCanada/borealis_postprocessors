@@ -6,9 +6,24 @@ SuperDARN data files.
 """
 
 
-def borealis_convert(filename: str, filetype: str, final_type: str,
-                    file_structure: str = 'array',
-                    final_file_structure: str = 'array'):
+import os
+
+
+FILE_TYPE_MAPPING = {
+    'antennas_iq': ['antennas_iq', 'bfiq', 'rawacf'],
+    'bfiq': ['bfiq', 'rawacf'],
+    'rawacf': ['rawacf']
+}
+
+FILE_STRUCTURE_MAPPING = {
+    'antennas_iq': ['site', 'array'],
+    'bfiq': ['site', 'array'],
+    'rawacf': ['site', 'array', 'dmap']
+}
+
+
+def convert_file(filename: str, file_type: str, final_type: str,
+                 file_structure: str = 'array', final_structure: str = 'array'):
     """
     Reads a SuperDARN data file, and converts it to the desired file
     type and structure.
@@ -17,7 +32,7 @@ def borealis_convert(filename: str, filetype: str, final_type: str,
     ----------
         filename: str
             file name containing SuperDARN data.
-        filetype: str
+        file_type: str
             Type of data file. Types include:
             'antennas_iq'
             'bfiq'
@@ -32,8 +47,34 @@ def borealis_convert(filename: str, filetype: str, final_type: str,
             All borealis files are either 'site' or 'array' structured.
             If not provided, it will try 'array' first, then 'site',
             then 'dmap'.
-        final_file_structure:
+        final_structure:
             The desired structure of the output file. Same structures as
             above.
     """
-    pass
+    if file_type not in ['antennas_iq', 'bfiq', 'rawacf']:
+        # TODO: Raise exception here
+        return
+
+    if file_structure not in ['array', 'site', 'dmap']:
+        # TODO: Raise exception here
+        return
+
+    if final_type not in ['antennas_iq', 'bfiq', 'rawacf']:
+        # TODO: Raise exception here
+        return
+
+    if final_structure not in ['array', 'site', 'dmap']:
+        # TODO: Raise exception here
+        return
+
+    if file_structure not in FILE_STRUCTURE_MAPPING[file_type]:
+        # TODO: Raise exception here
+        return
+    
+    if final_structure not in FILE_TYPE_MAPPING[final_type]:
+        # TODO: Raise exception here
+        return
+
+    if not os.path.isfile(filename):
+        # TODO: Raise exception here
+        return
