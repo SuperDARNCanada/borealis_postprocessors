@@ -73,36 +73,36 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
     """
     if file_type not in SUPPORTED_FILE_TYPES:
         raise conversion_exceptions.ImproperFileTypeError(
-            'Input file type {} not supported. Supported types'
+            'Input file type "{}" not supported. Supported types '
             'are {}'
             ''.format(file_type, SUPPORTED_FILE_TYPES)
         )
 
     if file_structure not in SUPPORTED_FILE_STRUCTURES:
         raise conversion_exceptions.ImproperFileStructureError(
-            'Input file structure {} not supported. Supported structures'
+            'Input file structure "{}" not supported. Supported structures '
             'are {}'
             ''.format(file_structure, SUPPORTED_FILE_STRUCTURES)
         )
 
     if final_type not in SUPPORTED_FILE_TYPES:
         raise conversion_exceptions.ImproperFileTypeError(
-            'Output file type {} not supported. Supported types'
+            'Output file type "{}" not supported. Supported types '
             'are {}'
             ''.format(final_type, SUPPORTED_FILE_TYPES)
         )
 
     if final_structure not in SUPPORTED_FILE_STRUCTURES:
         raise conversion_exceptions.ImproperFileStructureError(
-            'Output file structure {} not supported. Supported structures'
+            'Output file structure "{}" not supported. Supported structures '
             'are {}'
             ''.format(final_structure, SUPPORTED_FILE_STRUCTURES)
         )
 
     if file_structure not in FILE_STRUCTURE_MAPPING[file_type]:
         raise conversion_exceptions.ImproperFileStructureError(
-            'Input file structure {structure} is not compatible with '
-            'input file type {type}: Valid structures for {type} are '
+            'Input file structure "{structure}" is not compatible with '
+            'input file type "{type}": Valid structures for {type} are '
             '{valid}'.format(structure=file_structure,
                              type=file_type,
                              valid=FILE_STRUCTURE_MAPPING[file_type])
@@ -120,8 +120,8 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
 
     if final_structure not in FILE_STRUCTURE_MAPPING[final_type]:
         raise conversion_exceptions.ImproperFileStructureError(
-            'Output file structure {structure} is not compatible with '
-            'output file type {type}: Valid structures for {type} are '
+            'Output file structure "{structure}" is not compatible with '
+            'output file type "{type}": Valid structures for {type} are '
             '{valid}'.format(structure=final_structure,
                              type=final_type,
                              valid=FILE_STRUCTURE_MAPPING[final_type])
