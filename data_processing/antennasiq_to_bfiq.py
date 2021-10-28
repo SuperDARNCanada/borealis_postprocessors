@@ -14,7 +14,7 @@ else:
     cupy_available = True
 
 
-def beamform_samples(self, samples, beam_phases):
+def beamform_samples(samples, beam_phases):
     """
     Beamform the samples for multiple beams simultaneously.
 
