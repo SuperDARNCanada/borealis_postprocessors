@@ -9,6 +9,7 @@ SuperDARN data files.
 import os
 import pydarnio
 from exceptions import conversion_exceptions
+from data_processing import antennas_iq_to_bfiq, bfiq_to_rawacf
 
 SUPPORTED_FILE_TYPES = [
     'antennas_iq',
@@ -167,5 +168,60 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                    final_structure)
     # Downstream processing necessary
     else:
-        # TODO: Implement downstream processing
-        pass
+        # Convert array files to site files for processing
+        if file_structure == 'array':
+            reader = pydarnio.BorealisRead(filename,
+                                           file_type,
+                                           file_structure)
+            data = reader.records
+            antennas_file = '{}.site'.format(filename)
+            pydarnio.BorealisWrite(antennas_file,
+                                   data,
+                                   file_type,
+                                   'site')
+        else:
+            antennas_file = filename
+
+        # Process antennas_iq -> bfiq
+        if file_type == 'antennas_iq':
+            bfiq_file = antennas_iq_to_bfiq.antennas_iq_to_bfiq(antennas_file)
+            # If bfiq is the desired output type, no more data processing necessary
+            if final_type == 'bfiq':
+                # Convert to array structure if necessary
+                if final_structure == 'array':
+                    reader = pydarnio.BorealisRead(bfiq_file,
+                                                   'bfiq',
+                                                   'site')
+                    data = reader.arrays
+                    pydarnio.BorealisWrite(output_file,
+                                           data,
+                                           'bfiq',
+                                           'array')
+                exit(0)
+
+        # For convenience
+        elif file_type == 'bfiq':
+            bfiq_file = filename
+
+        # Process bfiq -> rawacf
+        rawacf_file = bfiq_to_rawacf.bfiq_to_rawacf(bfiq_file)
+        # Convert to array structure
+        if final_structure == 'array':
+            reader = pydarnio.BorealisRead(rawacf_file,
+                                           'rawacf',
+                                           'site')
+            data = reader.arrays
+            pydarnio.BorealisWrite(output_file,
+                                   data,
+                                   'rawacf',
+                                   'array')
+        # Convert to dmap structure
+        elif final_structure == 'dmap':
+            pydarnio.BorealisConvert(rawacf_file,
+                                     'rawacf',
+                                     output_file,
+                                     0,
+                                     'site')
+        exit(0)
+
+
