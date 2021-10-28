@@ -34,3 +34,21 @@ def beamform_samples(samples, beam_phases):
 
     return beamformed_samples
 
+
+def beamform_record(record):
+    """
+    Takes a record from an antennas_iq file and beamforms the data.
+
+    :param record:      Borealis antennas_iq record
+    :return:            Record of beamformed data for bfiq site file
+    """
+
+
+def antennas_iq_to_bfiq(filename):
+    """
+    Converts an antennas_iq site file to bfiq site file
+
+    :param filename:    Borealis antennas_iq site file
+    :type  filename:    String
+    :return:            Path to bfiq site file
+    """
