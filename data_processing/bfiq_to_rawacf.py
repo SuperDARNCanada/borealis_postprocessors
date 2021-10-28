@@ -72,3 +72,22 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output
         values.append(values_for_slice)
 
     return values
+
+
+def autocorrelate_record(record):
+    """
+    Takes a record from a bfiq file and calculates the autocorrelations.
+
+    :param record:      Borealis bfiq record
+    :return:            Record of rawacf data for rawacf site file
+    """
+
+
+def bfiq_to_rawacf(filename):
+    """
+    Converts a bfiq site file to rawacf site file
+
+    :param filename:    Borealis bfiq site file
+    :type  filename:    String
+    :return:            Path to rawacf site file
+    """
