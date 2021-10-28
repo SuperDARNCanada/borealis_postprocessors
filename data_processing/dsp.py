@@ -154,8 +154,8 @@ class DSP(object):
 
         :param      input_samples:  Baseband input samples
         :type       input_samples:  ndarray [num_slices, num_antennas, num_samples]
-        :param      lp:             Lowpass filter taps
-        :type       lp:             ndarray [1, num_taps]
+        :param      lp_filter:      Lowpass filter taps
+        :type       lp_filter:      ndarray [1, num_taps]
         :param      dm_rate:        The decimation rate of this stage.
         :type       dm_rate:        int
 
@@ -192,7 +192,7 @@ class DSP(object):
 
     @staticmethod
     def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output_sample_rate,
-                                    slice_index_details):
+                                  slice_index_details):
         """
         Correlate two sets of beamformed samples together. Correlation matrices are used and
         indices corresponding to lag pulse pairs are extracted.
@@ -230,8 +230,7 @@ class DSP(object):
             # [num_range_gates, 1, 1]
             # [1, num_lags, 2]
             samples_for_all_range_lags = (range_off[...,np.newaxis,np.newaxis] +
-                                            lag_pulses_as_samples[np.newaxis,:,:])
-
+                                          lag_pulses_as_samples[np.newaxis,:,:])
 
             # [num_range_gates, num_lags, 2]
             row = samples_for_all_range_lags[...,1].astype(np.int32)
