@@ -9,6 +9,32 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
+class GeneralConversionError(Exception):
+    """
+    Raised when an unexpected error occurs.
+
+    Parameters
+    ----------
+    error_str: str
+        explanation for why the error was raised.
+
+    Attributes
+    ----------
+    message: str
+        The message to display with the error
+
+    See Also
+    --------
+    conversion.py
+    """
+
+    def __init__(self, error_str: str):
+        self.message = "Unexpected error converting files: {error_str}"\
+            "".format(error_str=error_str)
+        postprocessing_logger.error(self.message)
+        Exception.__init__(self, self.message)
+
+
 class FileDoesNotExistError(Exception):
     """
     Raised when the file does not exist.
