@@ -7,6 +7,7 @@ SuperDARN data files.
 
 
 import os
+import subprocess as sp
 import pydarnio
 from exceptions import conversion_exceptions
 from data_processing import antennas_iq_to_bfiq, bfiq_to_rawacf
@@ -39,6 +40,19 @@ FILE_STRUCTURE_MAPPING = {
     'bfiq': ['site', 'array'],
     'rawacf': ['site', 'array', 'dmap']
 }
+
+
+def remove_temp_files(temp_file_list):
+    """
+    Deletes all temporary files used in the conversion chain.
+    """
+    for filename in temp_file_list:
+        cmd = 'rm {}'.format(filename)
+        result = sp.call(cmd.split())
+        if result != 0:
+            raise conversion_exceptions.FileDeletionError(
+                'Unable to delete temporary file {}'.format(filename)
+            )
 
 
 def convert_file(filename: str, output_file: str, file_type: str, final_type: str,
@@ -168,13 +182,16 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                    final_structure)
     # Downstream processing necessary
     else:
+        temp_files = [] # for storing paths to temp files for later deletion
         # Convert array files to site files for processing
         if file_structure == 'array':
             reader = pydarnio.BorealisRead(filename,
                                            file_type,
                                            file_structure)
             data = reader.records
-            site_file = 'tmp.site'
+            # Generate a filename for an intermediate site file
+            site_file = '{}.site'.format(file_type)
+            temp_files.append(site_file)
             pydarnio.BorealisWrite(site_file,
                                    data,
                                    file_type,
@@ -190,6 +207,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                 bfiq_file = output_file
             else:
                 bfiq_file = 'tmp.bfiq'
+                temp_files.append(bfiq_file)
 
             # Convert antennas_iq.site file to bfiq.site file
             antennas_iq_to_bfiq.antennas_iq_to_bfiq(site_file, bfiq_file)
@@ -206,6 +224,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                            data,
                                            'bfiq',
                                            'array')
+                remove_temp_files(temp_files)
                 return
 
         # For convenience
@@ -224,6 +243,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
             rawacf_file = output_file
         else:
             rawacf_file = 'tmp.rawacf'
+            temp_files.append(rawacf_file)
 
         # Process bfiq -> rawacf
         bfiq_to_rawacf.bfiq_to_rawacf(bfiq_file, rawacf_file)
@@ -244,6 +264,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                      output_file,
                                      0,
                                      'site')
+        remove_temp_files(temp_files)
         return
 
 
