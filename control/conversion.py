@@ -174,7 +174,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                            file_type,
                                            file_structure)
             data = reader.records
-            site_file = '{}.site'.format(filename)
+            site_file = 'tmp.site'
             pydarnio.BorealisWrite(site_file,
                                    data,
                                    file_type,
@@ -184,7 +184,16 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
 
         # Process antennas_iq -> bfiq
         if file_type == 'antennas_iq':
-            bfiq_file = antennas_iq_to_bfiq.antennas_iq_to_bfiq(site_file)
+
+            # Determine name for the bfiq file
+            if final_type == 'bfiq' and final_structure == 'site':
+                bfiq_file = output_file
+            else:
+                bfiq_file = 'tmp.bfiq'
+
+            # Convert antennas_iq.site file to bfiq.site file
+            antennas_iq_to_bfiq.antennas_iq_to_bfiq(site_file, bfiq_file)
+
             # If bfiq is the desired output type, no more data processing necessary
             if final_type == 'bfiq':
                 # Convert to array structure if necessary
@@ -197,14 +206,27 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                            data,
                                            'bfiq',
                                            'array')
-                exit(0)
+                return
 
         # For convenience
         elif file_type == 'bfiq':
             bfiq_file = site_file
 
+        # Shouldn't ever reach this
+        else:
+            raise conversion_exceptions.GeneralConversionError(
+                'Unexpected error converting {} to {}'
+                ''.format(filename, output_file)
+            )
+
+        # Determine file name for rawacf.site file
+        if final_structure == 'site':
+            rawacf_file = output_file
+        else:
+            rawacf_file = 'tmp.rawacf'
+
         # Process bfiq -> rawacf
-        rawacf_file = bfiq_to_rawacf.bfiq_to_rawacf(bfiq_file)
+        bfiq_to_rawacf.bfiq_to_rawacf(bfiq_file, rawacf_file)
         # Convert to array structure
         if final_structure == 'array':
             reader = pydarnio.BorealisRead(rawacf_file,
@@ -222,6 +244,6 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                      output_file,
                                      0,
                                      'site')
-        exit(0)
+        return
 
 
