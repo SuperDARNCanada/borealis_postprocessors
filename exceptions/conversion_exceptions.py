@@ -35,6 +35,32 @@ class GeneralConversionError(Exception):
         Exception.__init__(self, self.message)
 
 
+class FileDeletionError(Exception):
+    """
+    Raised when a file cannot be deleted.
+
+    Parameters
+    ----------
+    error_str: str
+        explanation for why the error was raised.
+
+    Attributes
+    ----------
+    message: str
+        The message to display with the error
+
+    See Also
+    --------
+    conversion.py
+    """
+
+    def __init__(self, error_str: str):
+        self.message = "Error deleting file: {error_str}"\
+            "".format(error_str=error_str)
+        postprocessing_logger.error(self.message)
+        Exception.__init__(self, self.message)
+
+
 class FileDoesNotExistError(Exception):
     """
     Raised when the file does not exist.
