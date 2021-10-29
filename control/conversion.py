@@ -174,17 +174,17 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                            file_type,
                                            file_structure)
             data = reader.records
-            antennas_file = '{}.site'.format(filename)
-            pydarnio.BorealisWrite(antennas_file,
+            site_file = '{}.site'.format(filename)
+            pydarnio.BorealisWrite(site_file,
                                    data,
                                    file_type,
                                    'site')
         else:
-            antennas_file = filename
+            site_file = filename
 
         # Process antennas_iq -> bfiq
         if file_type == 'antennas_iq':
-            bfiq_file = antennas_iq_to_bfiq.antennas_iq_to_bfiq(antennas_file)
+            bfiq_file = antennas_iq_to_bfiq.antennas_iq_to_bfiq(site_file)
             # If bfiq is the desired output type, no more data processing necessary
             if final_type == 'bfiq':
                 # Convert to array structure if necessary
@@ -201,7 +201,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
 
         # For convenience
         elif file_type == 'bfiq':
-            bfiq_file = filename
+            bfiq_file = site_file
 
         # Process bfiq -> rawacf
         rawacf_file = bfiq_to_rawacf.bfiq_to_rawacf(bfiq_file)
