@@ -83,11 +83,13 @@ def autocorrelate_record(record):
     """
 
 
-def bfiq_to_rawacf(filename):
+def bfiq_to_rawacf(infile, outfile):
     """
     Converts a bfiq site file to rawacf site file
 
-    :param filename:    Borealis bfiq site file
-    :type  filename:    String
+    :param infile:      Borealis bfiq site file
+    :type  infile:      String
+    :param outfile:     Borealis bfiq site file
+    :type  outfile:     String
     :return:            Path to rawacf site file
     """
