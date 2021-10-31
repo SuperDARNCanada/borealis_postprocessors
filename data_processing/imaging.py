@@ -25,6 +25,18 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
+def image_record(record, num_bins, min_angle, max_angle):
+    """
+    Images a record into num_bins between min_angle and max_angle
+
+    :param record:      Record from antennas_iq file. Dictionary
+    :param num_bins:    Number of azimuthal bins. Int
+    :param min_angle:   Minimum angle, clockwise from boresight. Degrees
+    :param max_angle:   Maximum angle, clockwise from boresight. Degrees
+    :return:            Record with imaged data. Dictionary
+    """
+
+
 def image_data(infile, outfile, num_bins, min_angle, max_angle):
     """
     Performs imaging on data from infile, for num_bins azimuthal angles
@@ -59,7 +71,7 @@ def image_data(infile, outfile, num_bins, min_angle, max_angle):
 
     # Convert each record to bfiq record
     for record in records:
-        imaged_record = image_record(group[record])
+        imaged_record = image_record(group[record], num_bins, min_angle, max_angle)
 
         # Convert to numpy arrays for saving to file with deepdish
         formatted_record = convert_to_numpy(imaged_record)
