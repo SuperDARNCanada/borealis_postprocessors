@@ -27,6 +27,23 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
+def image(antennas_data, num_bins, min_angle, max_angle, freq, antenna_spacing, pulse_phase_offset):
+    """
+    Performs imaging algorithm from Bristow 2019 (https://doi.org/10.1029/2019RS006851)
+
+    :param antennas_data:           Raw data
+    :param num_bins:                Number of azimuthal bins
+    :param min_angle:               Minimum angle in degrees clockwise from boresight
+    :param max_angle:               Maximum angle in degrees clockwise from boresight
+    :param freq:                    Signal frequency. kHz
+    :param antenna_spacing:         Spacing between antennas
+    :param pulse_phase_offset:      Pulse encoding of signal
+    :return:
+    """
+    beta = 2 * math.pi * freq / speed_of_light
+    # TODO: Decode phase here
+
+
 def image_record(record, num_bins, min_angle, max_angle):
     """
     Images a record into num_bins between min_angle and max_angle
@@ -83,7 +100,6 @@ def image_record(record, num_bins, min_angle, max_angle):
     # ---------------------------------------------------------------------------------------------------------------- #
     beam_azms = record['beam_azms']
     freq = record['freq']
-    beta = 2 * math.pi * freq / speed_of_light
     pulse_phase_offset = record['pulse_phase_offset']
     if pulse_phase_offset is None:
         pulse_phase_offset = [0.0] * len(record['pulses'])
@@ -110,13 +126,17 @@ def image_record(record, num_bins, min_angle, max_angle):
         # data return shape = [num_beams, num_samps]
         main_imaged_data = np.append(main_imaged_data,
                                      image(antennas_data[:main_antenna_count, sequence, :],
-                                           beam_azms,
+                                           num_bins,
+                                           min_angle,
+                                           max_angle,
                                            freq,
                                            main_antenna_spacing,
                                            pulse_phase_offset))
         intf_imaged_data = np.append(intf_imaged_data,
                                      image(antennas_data[main_antenna_count:, sequence, :],
-                                           beam_azms,
+                                           num_bins,
+                                           min_angle,
+                                           max_angle,
                                            freq,
                                            intf_antenna_spacing,
                                            pulse_phase_offset))
