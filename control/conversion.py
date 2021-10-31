@@ -47,12 +47,7 @@ def remove_temp_files(temp_file_list):
     Deletes all temporary files used in the conversion chain.
     """
     for filename in temp_file_list:
-        cmd = 'rm {}'.format(filename)
-        result = sp.call(cmd.split())
-        if result != 0:
-            raise conversion_exceptions.FileDeletionError(
-                'Unable to delete temporary file {}'.format(filename)
-            )
+        os.remove(filename)
 
 
 def convert_file(filename: str, output_file: str, file_type: str, final_type: str,
@@ -192,7 +187,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                                file_structure)
                 data = reader.records
                 # Generate a filename for an intermediate site file
-                site_file = '{}.site'.format(file_type)
+                site_file = '/tmp/tmp.antennas_iq'.format(file_type)
                 temp_files.append(site_file)
                 pydarnio.BorealisWrite(site_file,
                                        data,
@@ -208,7 +203,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                 if final_type == 'bfiq' and final_structure == 'site':
                     bfiq_file = output_file
                 else:
-                    bfiq_file = 'tmp.bfiq'
+                    bfiq_file = '/tmp/tmp.bfiq'
                     temp_files.append(bfiq_file)
 
                 # Convert antennas_iq.site file to bfiq.site file
@@ -244,7 +239,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
             if final_structure == 'site':
                 rawacf_file = output_file
             else:
-                rawacf_file = 'tmp.rawacf'
+                rawacf_file = '/tmp/tmp.rawacf'
                 temp_files.append(rawacf_file)
 
             # Process bfiq -> rawacf
@@ -270,7 +265,7 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
             return
 
         # Something went wrong. Delete temporary files
-        except Exception as e:
+        except Exception:
             remove_temp_files(temp_files)
             raise
 
