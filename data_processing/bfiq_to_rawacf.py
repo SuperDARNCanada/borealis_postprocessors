@@ -42,7 +42,7 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, record
     # beamformed_samples_1: [num_beams, num_samples]
     # beamformed_samples_2: [num_beams, num_samples]
     # correlated:           [num_beams, num_samples, num_samples]
-    correlated = xp.einsum('ij,ik->ijk', beamformed_samples_1.conj(),
+    correlated = xp.einsum('jk,jl->jlk', beamformed_samples_1.conj(),
                            beamformed_samples_2)
 
     if cupy_available:
@@ -73,11 +73,8 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, record
     # [num_range_gates, num_lags, 2]
     column = samples_for_all_range_lags[...,0].astype(np.int32)
 
-    # [num_range_gates, num_lags, num_beams]
-    values_for_record = correlated[:,row,column]
-
     # [num_beams, num_range_gates, num_lags]
-    values = np.einsum('ijk->kij', values_for_record)
+    values = correlated[:,row,column]
 
     return values
 
@@ -110,27 +107,25 @@ def convert_record(record):
     num_arrays, num_sequences, num_beams, num_samps = record['data_dimensions']
     bfiq_data = bfiq_data.reshape(record['data_dimensions'])
 
-    main_corrs_unavg = np.array([], dtype=np.complex64)
-    intf_corrs_unavg = np.array([], dtype=np.complex64)
-    cross_corrs_unavg = np.array([], dtype=np.complex64)
+    num_lags = len(record['lags'])
+    main_corrs_unavg = np.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=np.complex64)
+    intf_corrs_unavg = np.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=np.complex64)
+    cross_corrs_unavg = np.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=np.complex64)
 
     # Loop through every sequence and compute correlations.
     # Output shape after loop is [num_sequences, num_beams, num_range_gates, num_lags]
     for sequence in range(num_sequences):
         # data input shape  = [num_antenna_arrays, num_beams, num_samps]
         # data return shape = [num_beams, num_range_gates, num_lags]
-        main_corrs_unavg = np.append(main_corrs_unavg,
-                                     correlations_from_samples(bfiq_data[0, sequence, :, :],
-                                                               bfiq_data[0, sequence, :, :],
-                                                               record))
-        intf_corrs_unavg = np.append(intf_corrs_unavg,
-                                     correlations_from_samples(bfiq_data[1, sequence, :, :],
-                                                               bfiq_data[1, sequence, :, :],
-                                                               record))
-        cross_corrs_unavg = np.append(cross_corrs_unavg,
-                                      correlations_from_samples(bfiq_data[0, sequence, :, :],
-                                                                bfiq_data[1, sequence, :, :],
-                                                                record))
+        main_corrs_unavg[sequence, ...] = correlations_from_samples(bfiq_data[0, sequence, :, :],
+                                                                    bfiq_data[0, sequence, :, :],
+                                                                    record)
+        intf_corrs_unavg[sequence, ...] = correlations_from_samples(bfiq_data[1, sequence, :, :],
+                                                                    bfiq_data[1, sequence, :, :],
+                                                                    record)
+        cross_corrs_unavg[sequence, ...] = correlations_from_samples(bfiq_data[0, sequence, :, :],
+                                                                     bfiq_data[1, sequence, :, :],
+                                                                     record)
 
     if averaging_method == 'median':
         # TODO: Sort first
@@ -150,8 +145,8 @@ def convert_record(record):
     # ---------------------------------------------------------------------------------------------------------------- #
     # --------------------------------------- Data Descriptors & Dimensions ------------------------------------------ #
     # ---------------------------------------------------------------------------------------------------------------- #
-    record['correlation_descriptors'] = ['num_beams', 'num_range_gates', 'num_lags']
-    record['correlation_dimensions'] = np.array([num_beams, record['num_ranges'], record['num_lags']],
+    record['correlation_descriptors'] = ['num_beams', 'num_ranges', 'num_lags']
+    record['correlation_dimensions'] = np.array([num_beams, record['num_ranges'], num_lags],
                                                 dtype=np.uint32)
 
     # ---------------------------------------------------------------------------------------------------------------- #
@@ -163,6 +158,11 @@ def convert_record(record):
     del record['num_ranges']
     del record['num_samps']
     del record['pulse_phase_offset']
+
+    # Fix representation of empty dictionary if no slice interfacing present
+    slice_interfacing = record['slice_interfacing']
+    if not isinstance(slice_interfacing, dict) and slice_interfacing == '{':
+        record['slice_interfacing'] = '{}'
 
     return record
 
