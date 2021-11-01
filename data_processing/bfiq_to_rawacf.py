@@ -17,7 +17,7 @@ else:
 
 
 def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output_sample_rate,
-                              slice_index_details):
+                              record):
     """
     Correlate two sets of beamformed samples together. Correlation matrices are used and
     indices corresponding to lag pulse pairs are extracted.
@@ -26,50 +26,52 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output
     :type       beamformed_samples_1:  ndarray [num_slices, num_beams, num_samples]
     :param      beamformed_samples_2:  The second beamformed samples.
     :type       beamformed_samples_2:  ndarray [num_slices, num_beams, num_samples]
-    :param      slice_index_details:   Details used to extract indices for each slice.
-    :type       slice_index_details:   list
+    :param      record:                Details used to extract indices for each slice.
+    :type       record:                dictionary
 
-    :returns:   Correlations for slices.
+    :returns:   Correlations.
     :rtype:     list
     """
 
-    # [num_slices, num_beams, num_samples]
-    # [num_slices, num_beams, num_samples]
-    correlated = xp.einsum('ijk,ijl->ijkl', beamformed_samples_1.conj(),
+    # [num_beams, num_samples]
+    # [num_beams, num_samples]
+    correlated = xp.einsum('ij,jl->jkl', beamformed_samples_1.conj(),
                            beamformed_samples_2)
 
     if cupy_available:
         correlated = xp.asnumpy(correlated)
 
     values = []
-    for s in slice_index_details:
-        if s['lags'].size == 0:
-            values.append(np.array([]))
-            continue
-        range_off = np.arange(s['num_range_gates'], dtype=np.int32) + s['first_range_off']
+    if record['lags'].size == 0:
+        values.append(np.array([]))
+        return values
 
-        tau_in_samples = s['tau_spacing'] * 1e-6 * output_sample_rate
+    # First range offset in samples
+    sample_off = record['first_range_rtt'] * 1e-6 * output_sample_rate
+    sample_off = np.int32(sample_off)
 
-        lag_pulses_as_samples = np.array(s['lags'], np.int32) * np.int32(tau_in_samples)
+    # Range offset in samples
+    range_off = np.arange(record['num_ranges'], dtype=np.int32) + sample_off
 
-        # [num_range_gates, 1, 1]
-        # [1, num_lags, 2]
-        samples_for_all_range_lags = (range_off[...,np.newaxis,np.newaxis] +
-                                      lag_pulses_as_samples[np.newaxis,:,:])
+    tau_in_samples = record['tau_spacing'] * 1e-6 * output_sample_rate
 
-        # [num_range_gates, num_lags, 2]
-        row = samples_for_all_range_lags[...,1].astype(np.int32)
+    lag_pulses_as_samples = np.array(record['lags'], np.int32) * np.int32(tau_in_samples)
 
-        # [num_range_gates, num_lags, 2]
-        column = samples_for_all_range_lags[...,0].astype(np.int32)
+    # [num_range_gates, 1, 1]
+    # [1, num_lags, 2]
+    samples_for_all_range_lags = (range_off[...,np.newaxis,np.newaxis] +
+                                  lag_pulses_as_samples[np.newaxis,:,:])
 
-        values_for_slice = correlated[s['slice_num'],:,row,column]
+    # [num_range_gates, num_lags, 2]
+    row = samples_for_all_range_lags[...,1].astype(np.int32)
 
-        # [num_range_gates, num_lags, num_beams]
-        values_for_slice = np.einsum('ijk->kij', values_for_slice)
+    # [num_range_gates, num_lags, 2]
+    column = samples_for_all_range_lags[...,0].astype(np.int32)
 
-        # [num_beams, num_range_gates, num_lags]
-        values.append(values_for_slice)
+    values_for_record = correlated[:,row,column]
+
+    # [num_range_gates, num_lags, num_beams]
+    values = np.einsum('ijk->kij', values_for_record)
 
     return values
 
