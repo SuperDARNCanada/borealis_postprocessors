@@ -39,9 +39,10 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output
     :rtype:     list
     """
 
-    # [num_beams, num_samples]
-    # [num_beams, num_samples]
-    correlated = xp.einsum('ij,jl->jkl', beamformed_samples_1.conj(),
+    # beamformed_samples_1: [num_beams, num_samples]
+    # beamformed_samples_2: [num_beams, num_samples]
+    # correlated:           [num_beams, num_samples, num_samples]
+    correlated = xp.einsum('ij,ik->ijk', beamformed_samples_1.conj(),
                            beamformed_samples_2)
 
     if cupy_available:
@@ -56,11 +57,9 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output
     sample_off = record['first_range_rtt'] * 1e-6 * output_sample_rate
     sample_off = np.int32(sample_off)
 
-    # Range offset in samples
+    # Helpful values converted to units of samples
     range_off = np.arange(record['num_ranges'], dtype=np.int32) + sample_off
-
     tau_in_samples = record['tau_spacing'] * 1e-6 * output_sample_rate
-
     lag_pulses_as_samples = np.array(record['lags'], np.int32) * np.int32(tau_in_samples)
 
     # [num_range_gates, 1, 1]
@@ -74,9 +73,10 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output
     # [num_range_gates, num_lags, 2]
     column = samples_for_all_range_lags[...,0].astype(np.int32)
 
+    # [num_range_gates, num_lags, num_beams]
     values_for_record = correlated[:,row,column]
 
-    # [num_range_gates, num_lags, num_beams]
+    # [num_beams, num_range_gates, num_lags]
     values = np.einsum('ijk->kij', values_for_record)
 
     return values
