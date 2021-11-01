@@ -5,7 +5,11 @@ This file contains functions for converting bfiq files
 to rawacf files.
 """
 
+import logging
 import numpy as np
+import os
+import subprocess as sp
+import deepdish as dd
 
 try:
     import cupy as xp
@@ -14,6 +18,8 @@ except ImportError:
     cupy_available = False
 else:
     cupy_available = True
+
+postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
 def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output_sample_rate,
@@ -76,9 +82,9 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output
     return values
 
 
-def autocorrelate_record(record):
+def convert_record(record):
     """
-    Takes a record from a bfiq file and calculates the autocorrelations.
+    Takes a record from a bfiq file and processes it into record for rawacf file.
 
     :param record:      Borealis bfiq record
     :return:            Record of rawacf data for rawacf site file
@@ -95,3 +101,42 @@ def bfiq_to_rawacf(infile, outfile):
     :type  outfile:     String
     :return:            Path to rawacf site file
     """
+
+    def convert_to_numpy(data):
+        """Converts lists stored in dict into numpy array. Recursive.
+        Args:
+            data (Python dictionary): Dictionary with lists to convert to numpy arrays.
+        """
+        for k, v in data.items():
+            if isinstance(v, dict):
+                convert_to_numpy(v)
+            elif isinstance(v, list):
+                data[k] = np.array(v)
+            else:
+                continue
+        return data
+
+    postprocessing_logger.info('Converting file {} to bfiq'.format(infile))
+
+    # Load file to read in records
+    group = dd.io.load(infile)
+    records = group.keys()
+
+    # Convert each record to bfiq record
+    for record in records:
+        correlated_record = convert_record(group[record])
+
+        # Convert to numpy arrays for saving to file with deepdish
+        formatted_record = convert_to_numpy(correlated_record)
+
+        # Save record to temporary file
+        tempfile = '/tmp/{}.tmp'.format(record)
+        dd.io.save(tempfile, formatted_record, compression=None)
+
+        # Copy record to output file
+        cmd = 'h5copy -i {} -o {} -s {} -d {}'
+        cmd = cmd.format(tempfile, outfile, '/', '/{}'.format(record))
+        sp.call(cmd.split())
+
+        # Remove temporary file
+        os.remove(tempfile)
