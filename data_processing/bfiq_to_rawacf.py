@@ -23,8 +23,7 @@ else:
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output_sample_rate,
-                              record):
+def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, record):
     """
     Correlate two sets of beamformed samples together. Correlation matrices are used and
     indices corresponding to lag pulse pairs are extracted.
@@ -55,12 +54,12 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output
         return values
 
     # First range offset in samples
-    sample_off = record['first_range_rtt'] * 1e-6 * output_sample_rate
+    sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
     sample_off = np.int32(sample_off)
 
     # Helpful values converted to units of samples
     range_off = np.arange(record['num_ranges'], dtype=np.int32) + sample_off
-    tau_in_samples = record['tau_spacing'] * 1e-6 * output_sample_rate
+    tau_in_samples = record['tau_spacing'] * 1e-6 * record['rx_sample_rate']
     lag_pulses_as_samples = np.array(record['lags'], np.int32) * np.int32(tau_in_samples)
 
     # [num_range_gates, 1, 1]
@@ -91,109 +90,82 @@ def convert_record(record):
     :return:            Record of rawacf data for rawacf site file
     """
     # ---------------------------------------------------------------------------------------------------------------- #
-    # ------------------------------------------------ First Range --------------------------------------------------- #
+    # ---------------------------------------------- Averaging Method ------------------------------------------------ #
     # ---------------------------------------------------------------------------------------------------------------- #
-    first_range = 180.0  # scf.FIRST_RANGE
-    record['first_range'] = np.float32(first_range)
+    # TODO: Figure out how to get this
+    averaging_method = 'mean'
+    record['averaging_method'] = averaging_method
 
     # ---------------------------------------------------------------------------------------------------------------- #
-    # ---------------------------------------- First Range Round Trip Time ------------------------------------------- #
+    # --------------------------------------------- Correlate the data ----------------------------------------------- #
     # ---------------------------------------------------------------------------------------------------------------- #
-    first_range_rtt = first_range * 2.0 * 1.0e3 * 1e6 / speed_of_light
-    record['first_range_rtt'] = np.float32(first_range_rtt)
-
-    # ---------------------------------------------------------------------------------------------------------------- #
-    # ---------------------------------------------- Create Lag Table ------------------------------------------------ #
-    # ---------------------------------------------------------------------------------------------------------------- #
-    lag_table = list(itertools.combinations(record['pulses'], 2))  # Create all combinations of lags
-    lag_table.append([record['pulses'][0], record['pulses'][0]])  # lag 0
-    lag_table = sorted(lag_table, key=lambda x: x[1] - x[0])  # sort by lag number
-    lag_table.append([record['pulses'][-1], record['pulses'][-1]])  # alternate lag 0
-    lags = np.array(lag_table, dtype=np.uint32)
-    record['lags'] = lags
-
-    # ---------------------------------------------------------------------------------------------------------------- #
-    # ---------------------------------------------- Number of Ranges ------------------------------------------------ #
-    # ---------------------------------------------------------------------------------------------------------------- #
-    # TODO: Do this intelligently. Maybe grab from githash and cpid? Have default values too
-
-    station = record['station']
-    if station in ["cly", "rkn", "inv"]:
-        num_ranges = 100  # scf.POLARDARN_NUM_RANGES
-        record['num_ranges'] = np.uint32(num_ranges)
-    elif station in ["sas", "pgr"]:
-        num_ranges = 75  # scf.STD_NUM_RANGES
-        record['num_ranges'] = np.uint32(num_ranges)
-
-    # ---------------------------------------------------------------------------------------------------------------- #
-    # ---------------------------------------------- Range Separation ------------------------------------------------ #
-    # ---------------------------------------------------------------------------------------------------------------- #
-    range_sep = 1 / record['rx_sample_rate'] * speed_of_light / 1.0e3 / 2.0
-    record['range_sep'] = np.float32(range_sep)
-
-    # ---------------------------------------------------------------------------------------------------------------- #
-    # ---------------------------------------------- Beamform the data ----------------------------------------------- #
-    # ---------------------------------------------------------------------------------------------------------------- #
-    beam_azms = record['beam_azms']
-    freq = record['freq']
     pulse_phase_offset = record['pulse_phase_offset']
     if pulse_phase_offset is None:
         pulse_phase_offset = [0.0] * len(record['pulses'])
 
-    # antennas data shape  = [num_antennas, num_sequences, num_samps]
-    antennas_data = record['data']
+    # bfiq data shape  = [num_arrays, num_sequences, num_beams, num_samps]
+    bfiq_data = record['data']
 
     # Get the data and reshape
-    num_antennas, num_sequences, num_samps = record['data_dimensions']
-    antennas_data = antennas_data.reshape(record['data_dimensions'])
+    num_arrays, num_sequences, num_beams, num_samps = record['data_dimensions']
+    bfiq_data = bfiq_data.reshape(record['data_dimensions'])
 
-    main_beamformed_data = np.array([], dtype=np.complex64)
-    intf_beamformed_data = np.array([], dtype=np.complex64)
-    main_antenna_count = record['main_antenna_count']
+    main_corrs_unavg = np.array([], dtype=np.complex64)
+    intf_corrs_unavg = np.array([], dtype=np.complex64)
+    cross_corrs_unavg = np.array([], dtype=np.complex64)
 
-    # TODO: Grab these values from somewhere
-    main_antenna_spacing = 15.24
-    intf_antenna_spacing = 15.24
-
-    # Loop through every sequence and beamform the data.
-    # Output shape after loop is [num_sequences, num_beams, num_samps]
+    # Loop through every sequence and compute correlations.
+    # Output shape after loop is [num_sequences, num_beams, num_range_gates, num_lags]
     for sequence in range(num_sequences):
-        # data input shape  = [num_antennas, num_samps]
-        # data return shape = [num_beams, num_samps]
-        main_beamformed_data = np.append(main_beamformed_data,
-                                         beamform(antennas_data[:main_antenna_count, sequence, :],
-                                                  beam_azms,
-                                                  freq,
-                                                  main_antenna_spacing,
-                                                  pulse_phase_offset))
-        intf_beamformed_data = np.append(intf_beamformed_data,
-                                         beamform(antennas_data[main_antenna_count:, sequence, :],
-                                                  beam_azms,
-                                                  freq,
-                                                  intf_antenna_spacing,
-                                                  pulse_phase_offset))
+        # data input shape  = [num_antenna_arrays, num_beams, num_samps]
+        # data return shape = [num_beams, num_range_gates, num_lags]
+        main_corrs_unavg = np.append(main_corrs_unavg,
+                                     correlations_from_samples(bfiq_data[0, sequence, :, :],
+                                                               bfiq_data[0, sequence, :, :],
+                                                               record))
+        intf_corrs_unavg = np.append(intf_corrs_unavg,
+                                     correlations_from_samples(bfiq_data[1, sequence, :, :],
+                                                               bfiq_data[1, sequence, :, :],
+                                                               record))
+        cross_corrs_unavg = np.append(cross_corrs_unavg,
+                                      correlations_from_samples(bfiq_data[0, sequence, :, :],
+                                                                bfiq_data[1, sequence, :, :],
+                                                                record))
 
-    record['data'] = np.append(main_beamformed_data, intf_beamformed_data).flatten()
+    if averaging_method == 'median':
+        # TODO: Sort first
+        main_corrs = main_corrs_unavg[num_sequences//2, ...]
+        intf_corrs = intf_corrs_unavg[num_sequences//2, ...]
+        cross_corrs = cross_corrs_unavg[num_sequences//2, ...]
+    else:
+        # Using mean averaging
+        main_corrs = np.einsum('ijkl->jkl', main_corrs_unavg) / num_sequences
+        intf_corrs = np.einsum('ijkl->jkl', intf_corrs_unavg) / num_sequences
+        cross_corrs = np.einsum('ijkl->jkl', cross_corrs_unavg) / num_sequences
+
+    record['main_acfs'] = main_corrs.flatten()
+    record['intf_acfs'] = intf_corrs.flatten()
+    record['xcfs'] = cross_corrs.flatten()
 
     # ---------------------------------------------------------------------------------------------------------------- #
     # --------------------------------------- Data Descriptors & Dimensions ------------------------------------------ #
     # ---------------------------------------------------------------------------------------------------------------- #
-    # Old dimensions: [num_antennas, num_sequences, num_samps]
-    # New dimensions: [num_antenna_arrays, num_sequences, num_beams, num_samps]
-    data_descriptors = record['data_descriptors']
-    record['data_descriptors'] = ['num_antenna_arrays',
-                                  data_descriptors[1],
-                                  'num_beams',
-                                  data_descriptors[2]]
-    record['data_dimensions'] = np.array([2, num_sequences, len(beam_azms), num_samps],
-                                         dtype=np.uint32)
+    record['correlation_descriptors'] = ['num_beams', 'num_range_gates', 'num_lags']
+    record['correlation_dimensions'] = np.array([num_beams, record['num_ranges'], record['num_lags']],
+                                                dtype=np.uint32)
 
     # ---------------------------------------------------------------------------------------------------------------- #
-    # -------------------------------------------- Antennas Array Order ---------------------------------------------- #
+    # -------------------------------------------- Remove extra fields ----------------------------------------------- #
     # ---------------------------------------------------------------------------------------------------------------- #
-    record['antenna_arrays_order'] = ['main', 'intf']
+    del record['data']
+    del record['data_descriptors']
+    del record['data_dimensions']
+    del record['num_ranges']
+    del record['num_samps']
+    del record['pulse_phase_offset']
 
     return record
+
 
 def bfiq_to_rawacf(infile, outfile):
     """
