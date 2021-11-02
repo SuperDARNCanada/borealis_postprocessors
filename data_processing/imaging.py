@@ -53,16 +53,21 @@ def least_squares_inversion(correlations, beam_azms, freq, antenna_spacing):
     # [num_ant_1 * num_ant_2, num_beams]
     elongated_phase_matrix = np.resize(phase_matrix, (num_ant_1 * num_ant_2, num_beams))
 
-    # TODO: Compute covariance matrices
-    covars = np.ones((num_ant_1, num_ant_2, num_ranges, num_lags))
-    covars_inv = np.linalg.inv(covars.transpose((2, 3, 0, 1)))
+    # TODO: Compare with using numpy.linalg.pinv or scipy.linalg.pinv to calculate Moore-Penrose pseudo-inverse
+    # Solve the least squares problem with Moore-Penrose pseudo inverse method
+    pseudo_inv = np.linalg.pinv(elongated_phase_matrix)
+    xsections = np.einsum('ij,j->i')
 
-    # TODO: Figure out this syntax (elongated_phase_matrix^H * covars_inv)
-    bh_cinv = np.einsum()
-    # TODO: Figure out this syntax (bh_cinv * elongated_phase_matrix)
-    mp_inv = np.einsum()
-    # TODO: Figure out this syntax (mp_inv^-1 * mp_inv)
-    xsections = np.einsum(np.linalg.inv(mp_inv), mp_inv)
+    # # TODO: Compute covariance matrices
+    # covars = np.ones((num_ant_1, num_ant_2, num_ranges, num_lags))
+    # covars_inv = np.linalg.inv(covars.transpose((2, 3, 0, 1)))
+    #
+    # # TODO: Figure out this syntax (elongated_phase_matrix^H * covars_inv)
+    # bh_cinv = np.einsum()
+    # # TODO: Figure out this syntax (bh_cinv * elongated_phase_matrix)
+    # mp_inv = np.einsum()
+    # # TODO: Figure out this syntax (mp_inv^-1 * mp_inv)
+    # xsections = np.einsum(np.linalg.inv(mp_inv), mp_inv)
 
     return xsections
 
