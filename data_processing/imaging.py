@@ -86,29 +86,6 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, output
     return values
 
 
-def array_factor(angle, freq, num_antennas, antenna_spacing, linear_phase_shift):
-    """
-    Calculates the array factor for beam pattern strength
-
-    :param angle:               Clockwise from boresight. Degrees
-    :param freq:                Signal frequency. kHz
-    :param num_antennas:        Number of antennas. Int
-    :param antenna_spacing:     Spacing between antennas. Meters
-    :param linear_phase_shift:  Phase shift between adjacent antennas. Degrees
-    :return: Array factor of the setup.
-    """
-    # Radar wave number
-    beta = 2.0 * math.pi * freq / speed_of_light
-
-    # Arguments to sine functions in numerator and denominator
-    numerator_arg = num_antennas / 2.0 * (beta * antenna_spacing * np.sin(angle) - linear_phase_shift)
-    denominator_arg = (beta * antenna_spacing * np.sin(angle) - linear_phase_shift) / 2.0
-
-    factor = np.sin(numerator_arg) / np.sin(denominator_arg)
-
-    return factor
-
-
 def image(antennas_data, num_bins, min_angle, max_angle, freq, antenna_spacing, pulse_phase_offset):
     """
     Performs imaging algorithm from Bristow 2019 (https://doi.org/10.1029/2019RS006851)
