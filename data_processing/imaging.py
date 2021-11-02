@@ -12,6 +12,7 @@ import subprocess as sp
 import numpy as np
 import deepdish as dd
 from scipy.constants import speed_of_light
+from scipy.signal import correlate
 
 try:
     import cupy as xp
@@ -112,7 +113,7 @@ def image(antennas_data, num_bins, min_angle, max_angle, freq, antenna_spacing, 
     """
     Performs imaging algorithm from Bristow 2019 (https://doi.org/10.1029/2019RS006851)
 
-    :param antennas_data:           Raw data
+    :param antennas_data:           Raw data. Size [num_antennas, num_sequences, num_samps]
     :param num_bins:                Number of azimuthal bins
     :param min_angle:               Minimum angle in degrees clockwise from boresight
     :param max_angle:               Maximum angle in degrees clockwise from boresight
@@ -121,7 +122,6 @@ def image(antennas_data, num_bins, min_angle, max_angle, freq, antenna_spacing, 
     :param pulse_phase_offset:      Pulse encoding of signal
     :return:
     """
-    beta = 2 * math.pi * freq / speed_of_light
     # TODO: Decode phase here
 
 
@@ -177,6 +177,13 @@ def image_record(record, num_bins, min_angle, max_angle):
     record['range_sep'] = np.float32(range_sep)
 
     # ---------------------------------------------------------------------------------------------------------------- #
+    # ---------------------------------------------- Averaging Method ------------------------------------------------ #
+    # ---------------------------------------------------------------------------------------------------------------- #
+    # TODO: Figure out how to get this
+    averaging_method = 'mean'
+    record['averaging_method'] = averaging_method
+
+    # ---------------------------------------------------------------------------------------------------------------- #
     # ----------------------------------------------- Image the data ------------------------------------------------- #
     # ---------------------------------------------------------------------------------------------------------------- #
     beam_azms = record['beam_azms']
@@ -192,6 +199,7 @@ def image_record(record, num_bins, min_angle, max_angle):
     num_antennas, num_sequences, num_samps = record['data_dimensions']
     antennas_data = antennas_data.reshape(record['data_dimensions'])
 
+    # Loop through antennas and calculate correlation matrices, averaging over all sequences
     main_imaged_data = np.array([], dtype=np.complex64)
     intf_imaged_data = np.array([], dtype=np.complex64)
     main_antenna_count = record['main_antenna_count']
@@ -200,47 +208,125 @@ def image_record(record, num_bins, min_angle, max_angle):
     main_antenna_spacing = 15.24
     intf_antenna_spacing = 15.24
 
-    # Loop through every sequence and image the data.
-    # Output shape after loop is [num_sequences, num_beams, num_samps]
+    tau_in_samples = record['tau_spacing'] * 1e-6 * record['rx_sample_rate']
+    lag_pulses_as_samples = np.array(record['lags'], np.int32) * np.int32(tau_in_samples)
+
+    pulse_phase_offset = record['pulse_phase_offset']
+    if pulse_phase_offset is None:
+        pulse_phase_offset = [0.0] * len(record['pulses'])
+
+    num_lags = len(record['lags'])
+    main_corrs_unavg = np.zeros((num_sequences, num_antennas, num_antennas,
+                                 record['num_ranges'], num_lags), dtype=np.complex64)
+    intf_corrs_unavg = np.zeros((num_sequences, num_antennas, num_antennas,
+                                 record['num_ranges'], num_lags), dtype=np.complex64)
+    cross_corrs_unavg = np.zeros((num_sequences, num_antennas, num_antennas,
+                                  record['num_ranges'], num_lags), dtype=np.complex64)
+
+    # Loop through every sequence and compute correlations.
+    # Output shape after loop is [num_sequences, num_antennas, num_antennas, num_range_gates, num_lags]
     for sequence in range(num_sequences):
         # data input shape  = [num_antennas, num_samps]
-        # data return shape = [num_beams, num_samps]
-        main_imaged_data = np.append(main_imaged_data,
-                                     image(antennas_data[:main_antenna_count, sequence, :],
-                                           num_bins,
-                                           min_angle,
-                                           max_angle,
-                                           freq,
-                                           main_antenna_spacing,
-                                           pulse_phase_offset))
-        intf_imaged_data = np.append(intf_imaged_data,
-                                     image(antennas_data[main_antenna_count:, sequence, :],
-                                           num_bins,
-                                           min_angle,
-                                           max_angle,
-                                           freq,
-                                           intf_antenna_spacing,
-                                           pulse_phase_offset))
+        # data return shape = [num_antennas, num_antennas, num_range_gates, num_lags]
+        main_corrs_unavg[sequence, ...] = correlations_from_samples(antennas_data[:main_antenna_count, sequence, :],
+                                                                    antennas_data[:main_antenna_count, sequence, :],
+                                                                    record)
+        intf_corrs_unavg[sequence, ...] = correlations_from_samples(antennas_data[main_antenna_count:, sequence, :],
+                                                                    antennas_data[main_antenna_count:, sequence, :],
+                                                                    record)
+        cross_corrs_unavg[sequence, ...] = correlations_from_samples(antennas_data[:main_antenna_count, sequence, :],
+                                                                     antennas_data[main_antenna_count:, sequence, :],
+                                                                     record)
 
-    record['data'] = np.append(main_imaged_data, intf_imaged_data).flatten()
+    if averaging_method == 'median':
+        # TODO: Sort first
+        main_corrs = main_corrs_unavg[num_sequences // 2, ...]
+        intf_corrs = intf_corrs_unavg[num_sequences // 2, ...]
+        cross_corrs = cross_corrs_unavg[num_sequences // 2, ...]
+    else:
+        # Using mean averaging
+        main_corrs = np.einsum('ijklm->jklm', main_corrs_unavg) / num_sequences
+        intf_corrs = np.einsum('ijklm->jklm', intf_corrs_unavg) / num_sequences
+        cross_corrs = np.einsum('ijklm->jklm', cross_corrs_unavg) / num_sequences
+
+    # TODO: Least squares inversion at each range and lag
+    record['main_acfs'] = main_corrs.flatten()
+    record['intf_acfs'] = intf_corrs.flatten()
+    record['xcfs'] = cross_corrs.flatten()
 
     # ---------------------------------------------------------------------------------------------------------------- #
     # --------------------------------------- Data Descriptors & Dimensions ------------------------------------------ #
     # ---------------------------------------------------------------------------------------------------------------- #
-    # Old dimensions: [num_antennas, num_sequences, num_samps]
-    # New dimensions: [num_antenna_arrays, num_sequences, num_beams, num_samps]
-    data_descriptors = record['data_descriptors']
-    record['data_descriptors'] = ['num_antenna_arrays',
-                                  data_descriptors[1],
-                                  'num_beams',
-                                  data_descriptors[2]]
-    record['data_dimensions'] = np.array([2, num_sequences, len(beam_azms), num_samps],
-                                         dtype=np.uint32)
+    record['correlation_descriptors'] = ['num_beams', 'num_ranges', 'num_lags']
+    record['correlation_dimensions'] = np.array([num_bins, record['num_ranges'], num_lags],
+                                                dtype=np.uint32)
 
     # ---------------------------------------------------------------------------------------------------------------- #
-    # -------------------------------------------- Antennas Array Order ---------------------------------------------- #
+    # -------------------------------------------- Remove extra fields ----------------------------------------------- #
     # ---------------------------------------------------------------------------------------------------------------- #
-    record['antenna_arrays_order'] = ['main', 'intf']
+    del record['data']
+    del record['data_descriptors']
+    del record['data_dimensions']
+    del record['num_ranges']
+    del record['num_samps']
+    del record['pulse_phase_offset']
+
+    # Fix representation of empty dictionary if no slice interfacing present
+    slice_interfacing = record['slice_interfacing']
+    if not isinstance(slice_interfacing, dict) and slice_interfacing == '{':
+        record['slice_interfacing'] = '{}'
+
+    # # ---------------------------------------------------------------------------------------------------------------- #
+    # # ----------------------------------------------- Image the data ------------------------------------------------- #
+    # # ---------------------------------------------------------------------------------------------------------------- #
+
+    #
+    # # Loop through every sequence and image the data.
+    # # Output shape after loop is [num_sequences, num_beams, num_samps]
+    #
+    # # [num_antennas, num_antennas]
+    # antenna_correlations = np.zeros((num_antennas, num_antennas), dtype=np.complex64)
+    #
+    # for sequence in range(num_sequences):
+    #
+    #     # Loop through all antennas
+    #     for m in range(num_antennas):
+    #         antenna_1 = antennas_data[m, sequence, :]
+    #
+    #         # Loop through all all remaining antennas, including current antenna (m)
+    #         for n in range(m, num_antennas):
+    #             antenna_2 = antennas_data[n, sequence, :]
+    #
+    #             # Calculate the correlation between antennas
+    #             correlation = correlate(antenna_1, antenna_2, mode='full')
+    #
+    #             # Correlation between m and n is the same as between n and m
+    #             antenna_correlations[m, n] += correlation
+    #
+    #             # Correlation works both ways, but don't double-count antenna with itself
+    #             if n != m:
+    #                 antenna_correlations[n, m] += correlation
+    #
+    #     # # data return shape = [num_beams, num_samps]
+    #     # main_imaged_data = np.append(main_imaged_data,
+    #     #                              image(antennas_data[:main_antenna_count, sequence, :],
+    #     #                                    num_bins,
+    #     #                                    min_angle,
+    #     #                                    max_angle,
+    #     #                                    freq,
+    #     #                                    main_antenna_spacing,
+    #     #                                    pulse_phase_offset))
+    #     # intf_imaged_data = np.append(intf_imaged_data,
+    #     #                              image(antennas_data[main_antenna_count:, sequence, :],
+    #     #                                    num_bins,
+    #     #                                    min_angle,
+    #     #                                    max_angle,
+    #     #                                    freq,
+    #     #                                    intf_antenna_spacing,
+    #     #                                    pulse_phase_offset))
+    #
+    # record['data'] = np.append(main_imaged_data, intf_imaged_data).flatten()
+
 
     return record
 
