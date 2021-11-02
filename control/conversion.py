@@ -10,27 +10,29 @@ import os
 import subprocess as sp
 import pydarnio
 from exceptions import conversion_exceptions
-from data_processing import antennas_iq_to_bfiq, bfiq_to_rawacf
+from data_processing import antennas_iq_to_bfiq, bfiq_to_rawacf, imaging
 
 SUPPORTED_FILE_TYPES = [
     'antennas_iq',
     'bfiq',
-    'rawacf'
+    'rawacf',
+    'image'
 ]
 
 SUPPORTED_FILE_STRUCTURES = [
     'array',
     'site',
-    'rawacf'
+    'dmap'
 ]
 
 # Keys are valid input file types, values are lists of allowed
 # output file types. A file of type 'key' can be processed into
 # any type in 'value'.
 FILE_TYPE_MAPPING = {
-    'antennas_iq': ['antennas_iq', 'bfiq', 'rawacf'],
+    'antennas_iq': ['antennas_iq', 'bfiq', 'rawacf', 'image'],
     'bfiq': ['bfiq', 'rawacf'],
-    'rawacf': ['rawacf']
+    'rawacf': ['rawacf'],
+    'image': ['image']
 }
 
 # Keys are valid input file types, and values are lists of
@@ -38,7 +40,8 @@ FILE_TYPE_MAPPING = {
 FILE_STRUCTURE_MAPPING = {
     'antennas_iq': ['site', 'array'],
     'bfiq': ['site', 'array'],
-    'rawacf': ['site', 'array', 'dmap']
+    'rawacf': ['site', 'array', 'dmap'],
+    'image': ['site', 'array']
 }
 
 
@@ -51,7 +54,7 @@ def remove_temp_files(temp_file_list):
 
 
 def convert_file(filename: str, output_file: str, file_type: str, final_type: str,
-                 file_structure: str = 'array', final_structure: str = 'array'):
+                 file_structure: str = 'array', final_structure: str = 'array', **kwargs):
     """
     Reads a SuperDARN data file, and converts it to the desired file
     type and structure.
@@ -80,6 +83,12 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
         final_structure:
             The desired structure of the output file. Same structures as
             above.
+        **kwargs:
+            Keyword arguments, used for specifying imaging parameters. Valid keywords are:
+            'num_beams'
+            'min_angle'
+            'max_angle'
+            'averaging_method'
     """
     if file_type not in SUPPORTED_FILE_TYPES:
         raise conversion_exceptions.ImproperFileTypeError(
@@ -199,30 +208,51 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
             # Process antennas_iq -> bfiq
             if file_type == 'antennas_iq':
 
-                # Determine name for the bfiq file
-                if final_type == 'bfiq' and final_structure == 'site':
-                    bfiq_file = output_file
-                else:
-                    bfiq_file = '/tmp/tmp.bfiq'
-                    temp_files.append(bfiq_file)
+                # Imaging selected
+                if final_type == 'image':
+                    # Determine name for the image file
+                    if final_structure == 'site':
+                        image_file = output_file
+                    else:
+                        image_file = '/tmp/tmp.image'
 
-                # Convert antennas_iq.site file to bfiq.site file
-                antennas_iq_to_bfiq.antennas_iq_to_bfiq(site_file, bfiq_file)
+                    # Convert to image file
+                    imaging.image_data(site_file, image_file,
+                                       kwargs['num_beams'], kwargs['min_angle'],
+                                       kwargs['max_angle'], kwargs['averaging_method'])
 
-                # If bfiq is the desired output type, no more data processing necessary
-                if final_type == 'bfiq':
                     # Convert to array structure if necessary
                     if final_structure == 'array':
-                        reader = pydarnio.BorealisRead(bfiq_file,
-                                                       'bfiq',
-                                                       'site')
+                        reader = pydarnio.BorealisRead(image_file, 'image', 'site')
                         data = reader.arrays
-                        pydarnio.BorealisWrite(output_file,
-                                               data,
-                                               'bfiq',
-                                               'array')
-                    remove_temp_files(temp_files)
+                        pydarnio.BorealisWrite(output_file, data, 'image', 'array')
+
                     return
+                else:
+                    # Determine name for the bfiq file
+                    if final_type == 'bfiq' and final_structure == 'site':
+                        bfiq_file = output_file
+                    else:
+                        bfiq_file = '/tmp/tmp.bfiq'
+                        temp_files.append(bfiq_file)
+
+                    # Convert antennas_iq.site file to bfiq.site file
+                    antennas_iq_to_bfiq.antennas_iq_to_bfiq(site_file, bfiq_file)
+
+                    # If bfiq is the desired output type, no more data processing necessary
+                    if final_type == 'bfiq':
+                        # Convert to array structure if necessary
+                        if final_structure == 'array':
+                            reader = pydarnio.BorealisRead(bfiq_file,
+                                                           'bfiq',
+                                                           'site')
+                            data = reader.arrays
+                            pydarnio.BorealisWrite(output_file,
+                                                   data,
+                                                   'bfiq',
+                                                   'array')
+                        remove_temp_files(temp_files)
+                        return
 
             # For convenience
             elif file_type == 'bfiq':
