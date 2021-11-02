@@ -53,10 +53,14 @@ def least_squares_inversion(correlations, beam_azms, freq, antenna_spacing):
     # [num_ant_1 * num_ant_2, num_beams]
     elongated_phase_matrix = np.resize(phase_matrix, (num_ant_1 * num_ant_2, num_beams))
 
-    # TODO: Compare with using numpy.linalg.pinv or scipy.linalg.pinv to calculate Moore-Penrose pseudo-inverse
+    # TODO: Compare with scipy.linalg.pinv and scipy.linalg.lstsq
     # Solve the least squares problem with Moore-Penrose pseudo inverse method
     pseudo_inv = np.linalg.pinv(elongated_phase_matrix)
-    xsections = np.einsum('ij,j->i')
+
+    # elongated_phase_matrix: [num_ant_1*num_ant_2, num_beams]
+    # elongated_corrs:        [num_ant_1*num_ant_2, num_ranges, num_lags]
+    # xsections:              [num_beams, num_ranges, num_lags]
+    xsections = np.einsum('il,ijk,->ljk', elongated_phase_matrix, elongated_corrs)
 
     # # TODO: Compute covariance matrices
     # covars = np.ones((num_ant_1, num_ant_2, num_ranges, num_lags))
@@ -252,6 +256,7 @@ def image_record(record, num_bins, min_angle, max_angle):
         main_corrs = np.einsum('ijklm->jklm', main_corrs_unavg) / num_sequences
         intf_corrs = np.einsum('ijklm->jklm', intf_corrs_unavg) / num_sequences
         cross_corrs = np.einsum('ijklm->jklm', cross_corrs_unavg) / num_sequences
+
 
     # TODO: Least squares inversion at each range and lag
     record['main_acfs'] = main_corrs.flatten()
