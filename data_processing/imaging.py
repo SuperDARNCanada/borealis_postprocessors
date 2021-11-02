@@ -257,18 +257,22 @@ def image_record(record, num_bins, min_angle, max_angle):
         intf_corrs = np.einsum('ijklm->jklm', intf_corrs_unavg) / num_sequences
         cross_corrs = np.einsum('ijklm->jklm', cross_corrs_unavg) / num_sequences
 
+    # Use least squares inversion to estimate the scattering cross-section
+    main_xsections = least_squares_inversion(main_corrs, beam_azms, freq, main_antenna_spacing)
+    intf_xsections = least_squares_inversion(intf_corrs, beam_azms, freq, intf_antenna_spacing)
 
-    # TODO: Least squares inversion at each range and lag
-    record['main_acfs'] = main_corrs.flatten()
-    record['intf_acfs'] = intf_corrs.flatten()
-    record['xcfs'] = cross_corrs.flatten()
+    record['main_cross_sections'] = main_xsections.flatten()
+    record['intf_xsections'] = intf_xsections.flatten()
+
+    # TODO: Figure out how to do cross-correlation (antenna spacings are different)
+    #record['xcfs'] = cross_corrs.flatten()
 
     # ---------------------------------------------------------------------------------------------------------------- #
     # --------------------------------------- Data Descriptors & Dimensions ------------------------------------------ #
     # ---------------------------------------------------------------------------------------------------------------- #
-    record['correlation_descriptors'] = ['num_beams', 'num_ranges', 'num_lags']
-    record['correlation_dimensions'] = np.array([num_bins, record['num_ranges'], num_lags],
-                                                dtype=np.uint32)
+    record['cross_section_descriptors'] = ['num_beams', 'num_ranges', 'num_lags']
+    record['cross_section_dimensions'] = np.array([num_bins, record['num_ranges'], num_lags],
+                                                  dtype=np.uint32)
 
     # ---------------------------------------------------------------------------------------------------------------- #
     # -------------------------------------------- Remove extra fields ----------------------------------------------- #
@@ -284,58 +288,6 @@ def image_record(record, num_bins, min_angle, max_angle):
     slice_interfacing = record['slice_interfacing']
     if not isinstance(slice_interfacing, dict) and slice_interfacing == '{':
         record['slice_interfacing'] = '{}'
-
-    # # ---------------------------------------------------------------------------------------------------------------- #
-    # # ----------------------------------------------- Image the data ------------------------------------------------- #
-    # # ---------------------------------------------------------------------------------------------------------------- #
-
-    #
-    # # Loop through every sequence and image the data.
-    # # Output shape after loop is [num_sequences, num_beams, num_samps]
-    #
-    # # [num_antennas, num_antennas]
-    # antenna_correlations = np.zeros((num_antennas, num_antennas), dtype=np.complex64)
-    #
-    # for sequence in range(num_sequences):
-    #
-    #     # Loop through all antennas
-    #     for m in range(num_antennas):
-    #         antenna_1 = antennas_data[m, sequence, :]
-    #
-    #         # Loop through all all remaining antennas, including current antenna (m)
-    #         for n in range(m, num_antennas):
-    #             antenna_2 = antennas_data[n, sequence, :]
-    #
-    #             # Calculate the correlation between antennas
-    #             correlation = correlate(antenna_1, antenna_2, mode='full')
-    #
-    #             # Correlation between m and n is the same as between n and m
-    #             antenna_correlations[m, n] += correlation
-    #
-    #             # Correlation works both ways, but don't double-count antenna with itself
-    #             if n != m:
-    #                 antenna_correlations[n, m] += correlation
-    #
-    #     # # data return shape = [num_beams, num_samps]
-    #     # main_imaged_data = np.append(main_imaged_data,
-    #     #                              image(antennas_data[:main_antenna_count, sequence, :],
-    #     #                                    num_bins,
-    #     #                                    min_angle,
-    #     #                                    max_angle,
-    #     #                                    freq,
-    #     #                                    main_antenna_spacing,
-    #     #                                    pulse_phase_offset))
-    #     # intf_imaged_data = np.append(intf_imaged_data,
-    #     #                              image(antennas_data[main_antenna_count:, sequence, :],
-    #     #                                    num_bins,
-    #     #                                    min_angle,
-    #     #                                    max_angle,
-    #     #                                    freq,
-    #     #                                    intf_antenna_spacing,
-    #     #                                    pulse_phase_offset))
-    #
-    # record['data'] = np.append(main_imaged_data, intf_imaged_data).flatten()
-
 
     return record
 
