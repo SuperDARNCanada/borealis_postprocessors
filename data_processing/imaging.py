@@ -30,6 +30,43 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
+def least_squares_inversion(correlations, beam_azms, freq, antenna_spacing):
+
+    num_beams = len(beam_azms)
+    wave_num = 2.0 * np.pi * freq / speed_of_light
+
+    # Flatten num_antennas_1 with num_antennas_2 to produce vector snapshots in (range, lag)
+    num_ant_1, num_ant_2, num_ranges, num_lags = correlations.shape
+    elongated_corrs = np.resize(correlations, (num_ant_1 * num_ant_2, num_ranges, num_lags))
+
+    # Create complex exponential matrix for inversion
+    # -> [num_ant_1, num_ant_2]
+    antenna_index_diffs = np.arange(num_ant_1, np.newaxis) - np.arange(np.newaxis, num_ant_2)
+
+    # [num_beams]
+    phases = np.sin(beam_azms)
+
+    # [num_ant_1, num_ant_2, num_beams]
+    exponents = np.einsum('ij,k->ijk', antenna_index_diffs, phases)
+    phase_matrix = np.exp(-1j * wave_num * antenna_spacing * exponents)
+
+    # [num_ant_1 * num_ant_2, num_beams]
+    elongated_phase_matrix = np.resize(phase_matrix, (num_ant_1 * num_ant_2, num_beams))
+
+    # TODO: Compute covariance matrices
+    covars = np.ones((num_ant_1, num_ant_2, num_ranges, num_lags))
+    covars_inv = np.linalg.inv(covars.transpose((2, 3, 0, 1)))
+
+    # TODO: Figure out this syntax (elongated_phase_matrix^H * covars_inv)
+    bh_cinv = np.einsum()
+    # TODO: Figure out this syntax (bh_cinv * elongated_phase_matrix)
+    mp_inv = np.einsum()
+    # TODO: Figure out this syntax (mp_inv^-1 * mp_inv)
+    xsections = np.einsum(np.linalg.inv(mp_inv), mp_inv)
+
+    return xsections
+
+
 def correlations_from_samples(samples_1, samples_2, record):
     """
     Correlate two sets of samples together. Correlation matrices are used and
@@ -200,7 +237,6 @@ def image_record(record, num_bins, min_angle, max_angle):
         cross_corrs_unavg[sequence, ...] = correlations_from_samples(antennas_data[:main_antenna_count, sequence, :],
                                                                      antennas_data[main_antenna_count:, sequence, :],
                                                                      record)
-
     if averaging_method == 'median':
         # TODO: Sort first
         main_corrs = main_corrs_unavg[num_sequences // 2, ...]
