@@ -51,7 +51,7 @@ def remove_temp_files(temp_file_list):
 
 
 def convert_file(filename: str, output_file: str, file_type: str, final_type: str,
-                 file_structure: str = 'array', final_structure: str = 'array'):
+                 file_structure: str = 'array', final_structure: str = 'array', **kwargs):
     """
     Reads a SuperDARN data file, and converts it to the desired file
     type and structure.
@@ -80,6 +80,9 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
         final_structure:
             The desired structure of the output file. Same structures as
             above.
+        kwargs:
+            Keyword arguments. Supported arguments:
+            'averaging_method' - 'mean' or 'median'
     """
     if file_type not in SUPPORTED_FILE_TYPES:
         raise conversion_exceptions.ImproperFileTypeError(
@@ -243,7 +246,16 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                 temp_files.append(rawacf_file)
 
             # Process bfiq -> rawacf
-            bfiq_to_rawacf.bfiq_to_rawacf(bfiq_file, rawacf_file)
+            # Check the averaging method provided
+            avg_method = kwargs['averaging_method']
+            if avg_method is not None:
+                if avg_method not in ['mean', 'median']:
+                    raise ValueError('kwarg "averaging_method" not an acceptable value. '
+                                     'Acceptable values are "mean" and "median".')
+            else:
+                avg_method = 'mean'
+
+            bfiq_to_rawacf.bfiq_to_rawacf(bfiq_file, rawacf_file, avg_method)
             # Convert to array structure
             if final_structure == 'array':
                 reader = pydarnio.BorealisRead(rawacf_file,

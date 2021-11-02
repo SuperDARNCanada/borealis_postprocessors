@@ -79,18 +79,17 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, record
     return values
 
 
-def convert_record(record):
+def convert_record(record, averaging_method):
     """
     Takes a record from a bfiq file and processes it into record for rawacf file.
 
-    :param record:      Borealis bfiq record
-    :return:            Record of rawacf data for rawacf site file
+    :param record:              Borealis bfiq record
+    :param averaging_method:    Either 'mean' or 'median'
+    :return:                    Record of rawacf data for rawacf site file
     """
     # ---------------------------------------------------------------------------------------------------------------- #
     # ---------------------------------------------- Averaging Method ------------------------------------------------ #
     # ---------------------------------------------------------------------------------------------------------------- #
-    # TODO: Figure out how to get this
-    averaging_method = 'mean'
     record['averaging_method'] = averaging_method
 
     # ---------------------------------------------------------------------------------------------------------------- #
@@ -128,10 +127,9 @@ def convert_record(record):
                                                                      record)
 
     if averaging_method == 'median':
-        # TODO: Sort first
-        main_corrs = main_corrs_unavg[num_sequences//2, ...]
-        intf_corrs = intf_corrs_unavg[num_sequences//2, ...]
-        cross_corrs = cross_corrs_unavg[num_sequences//2, ...]
+        main_corrs = np.median(main_corrs_unavg, axis=0)
+        intf_corrs = np.median(intf_corrs_unavg, axis=0)
+        cross_corrs = np.median(cross_corrs_unavg, axis=0)
     else:
         # Using mean averaging
         main_corrs = np.einsum('ijkl->jkl', main_corrs_unavg) / num_sequences
@@ -167,15 +165,17 @@ def convert_record(record):
     return record
 
 
-def bfiq_to_rawacf(infile, outfile):
+def bfiq_to_rawacf(infile, outfile, averaging_method):
     """
     Converts a bfiq site file to rawacf site file
 
-    :param infile:      Borealis bfiq site file
-    :type  infile:      String
-    :param outfile:     Borealis bfiq site file
-    :type  outfile:     String
-    :return:            Path to rawacf site file
+    :param infile:              Borealis bfiq site file
+    :type  infile:              String
+    :param outfile:             Borealis bfiq site file
+    :type  outfile:             String
+    :param averaging_method:    Method to average over a sequence. Either 'mean' or 'median'
+    :type  averaging_method:    String
+    :return:                    Path to rawacf site file
     """
 
     def convert_to_numpy(data):
@@ -200,7 +200,7 @@ def bfiq_to_rawacf(infile, outfile):
 
     # Convert each record to bfiq record
     for record in records:
-        correlated_record = convert_record(group[record])
+        correlated_record = convert_record(group[record], averaging_method)
 
         # Convert to numpy arrays for saving to file with deepdish
         formatted_record = convert_to_numpy(correlated_record)
