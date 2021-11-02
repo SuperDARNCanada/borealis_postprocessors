@@ -4,6 +4,8 @@
 This file contains functions to image antennas_iq data into
 rawacf-style data with higher azimuthal resolution than
 standard SuperDARN rawacf files.
+
+Performs imaging algorithm from Bristow 2019 (https://doi.org/10.1029/2019RS006851)
 """
 import itertools
 import math
@@ -84,22 +86,6 @@ def correlations_from_samples(samples_1, samples_2, record):
     values_for_slice = correlated[:, :, row, column]
 
     return values
-
-
-def image(antennas_data, num_bins, min_angle, max_angle, freq, antenna_spacing, pulse_phase_offset):
-    """
-    Performs imaging algorithm from Bristow 2019 (https://doi.org/10.1029/2019RS006851)
-
-    :param antennas_data:           Raw data. Size [num_antennas, num_sequences, num_samps]
-    :param num_bins:                Number of azimuthal bins
-    :param min_angle:               Minimum angle in degrees clockwise from boresight
-    :param max_angle:               Maximum angle in degrees clockwise from boresight
-    :param freq:                    Signal frequency. kHz
-    :param antenna_spacing:         Spacing between antennas. Meters
-    :param pulse_phase_offset:      Pulse encoding of signal
-    :return:
-    """
-    # TODO: Decode phase here
 
 
 def image_record(record, num_bins, min_angle, max_angle):
