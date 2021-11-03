@@ -211,9 +211,9 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
                                            file_type,
                                            file_structure)
             if file_structure == 'array':
-                data = reader.arrays
-            else:   # site structured
                 data = reader.records
+            else:   # site structured
+                data = reader.arrays
             pydarnio.BorealisWrite(output_file,
                                    data,
                                    final_type,
