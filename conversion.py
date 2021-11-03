@@ -5,9 +5,8 @@ This file contains functions for opening and converting
 SuperDARN data files.
 """
 
-
+import argparse
 import os
-import subprocess as sp
 import pydarnio
 from exceptions import conversion_exceptions
 from data_processing import antennas_iq_to_bfiq, bfiq_to_rawacf
@@ -40,6 +39,47 @@ FILE_STRUCTURE_MAPPING = {
     'bfiq': ['site', 'array'],
     'rawacf': ['site', 'array', 'dmap']
 }
+
+
+def usage_msg():
+    """
+    Return the usage message for this process.
+    This is used if a -h flag or invalid arguments are provided.
+    :returns: the usage message
+    """
+
+    usage_message = """ conversion.py [-h] infile outfile file_type final_type file_structure final_structure [averaging_method]
+    
+    Pass in the filename you wish to convert, the filename you wish to save as, and the types and structures of both.
+    The script will :
+    1. convert the input file into an output file of type "final_type" and structure "final_structure". If
+       the final type is rawacf, the averaging method may optionally be specified as well (default is mean). """
+
+    return usage_message
+
+
+def conversion_parser():
+    parser = argparse.ArgumentParser(usage=usage_msg())
+    parser.add_argument("--infile", required=True,
+                        help="Path to the file that you wish to convert. (e.g. 20190327.2210.38.sas.0.bfiq.hdf5.site)")
+    parser.add_argument("--outfile", required=True,
+                        help="Path to the location where the output file should be stored. "
+                             "(e.g. 20190327.2210.38.sas.0.rawacf.hdf5.site)")
+    parser.add_argument("--filetype", required=True,
+                        help="Type of input file. Acceptable types are 'antennas_iq', 'bfiq', and 'rawacf'.")
+    parser.add_argument("--final_type", required=True,
+                        help="Type of output file. Acceptable types are 'antennas_iq', 'bfiq', and 'rawacf'.")
+    parser.add_argument("--file_structure", required=True,
+                        help="Structure of input file. Acceptable structures are "
+                             "'array', 'site', and 'dmap' (dmap for rawacf type only).")
+    parser.add_argument("--final_structure", required=True,
+                        help="Structure of output file. Acceptable structures are 'array', 'site', "
+                             "and 'dmap' (dmap for rawacf type only).")
+    parser.add_argument("--averaging_method", required=False, default='mean',
+                        help="Averaging method for generating rawacf type file. Allowed "
+                             "methods are 'mean' (default) and 'median'.")
+
+    return parser
 
 
 def remove_temp_files(temp_file_list):
@@ -281,3 +321,14 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
             remove_temp_files(temp_files)
             raise
 
+
+def main():
+    parser = conversion_parser()
+    args = parser.parse_args()
+
+    convert_file(args.infile, args.outfile, args.filetype, args.final_type, args.file_structure, args.final_structure,
+                 averaging_method=args.averaging_method)
+
+
+if __name__ == "__main__":
+    main()
