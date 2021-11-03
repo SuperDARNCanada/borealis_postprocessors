@@ -21,7 +21,7 @@ SUPPORTED_FILE_TYPES = [
 SUPPORTED_FILE_STRUCTURES = [
     'array',
     'site',
-    'rawacf'
+    'dmap'
 ]
 
 # Keys are valid input file types, values are lists of allowed
