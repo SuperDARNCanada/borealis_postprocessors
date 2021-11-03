@@ -28,7 +28,7 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-def get_phshift(beamdir, freq, antenna, num_antennas, antenna_spacing,
+def get_phshift(beamdir, freq, antenna, pulse_shift, num_antennas, antenna_spacing,
                 centre_offset=0.0):
     """
     Find the phase shift for a given antenna and beam direction.
@@ -40,6 +40,7 @@ def get_phshift(beamdir, freq, antenna, num_antennas, antenna_spacing,
     :param freq: transmit frequency in kHz
     :param antenna: antenna number, INDEXED FROM ZERO, zero being the leftmost antenna if looking down the boresight
         and positive beamdir right of boresight
+    :param pulse_shift: in degrees, for phase encoding
     :param num_antennas: number of antennas in this array
     :param antenna_spacing: distance between antennas in this array, in meters
     :param centre_offset: the phase reference for the midpoint of the array. Default = 0.0, in metres.
@@ -49,13 +50,15 @@ def get_phshift(beamdir, freq, antenna, num_antennas, antenna_spacing,
     """
     freq = freq * 1000.0  # convert to Hz.
 
-    beamdir = float(beamdir)
-    beamrad = math.pi * float(beamdir) / 180.0
+    # Convert to radians
+    beamrad = math.pi * np.float64(beamdir) / 180.0
 
     # Pointing to right of boresight, use point in middle (hypothetically antenna 7.5) as phshift=0
     phshift = 2 * math.pi * freq * \
               (((num_antennas - 1) / 2.0 - antenna) * antenna_spacing + centre_offset) * \
               math.cos(math.pi / 2.0 - beamrad) / speed_of_light
+
+    phshift = phshift + math.radians(pulse_shift)
 
     # Bring into range (-2*pi, 2*pi)
     phshift = math.fmod(phshift, 2 * math.pi)
@@ -104,6 +107,7 @@ def beamform(antennas_data, beamdirs, rxfreq, antenna_spacing, pulse_phase_offse
             phase_shift = get_phshift(beam_direction,
                                       rxfreq,
                                       antenna,
+                                      0.0,
                                       num_antennas,
                                       antenna_spacing)
             # Bring into range (-2*pi, 2*pi) and negate
