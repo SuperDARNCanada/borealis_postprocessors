@@ -76,6 +76,13 @@ def correlations_from_samples(beamformed_samples_1, beamformed_samples_2, record
     # [num_beams, num_range_gates, num_lags]
     values = correlated[:,row,column]
 
+    # Find the sample that corresponds to the second pulse transmitting
+    second_pulse_sample_num = np.int32(tau_in_samples) * record['pulses'][1] - sample_off - 1
+
+    # Replace all ranges which are contaminated by the second pulse for lag 0
+    # with the data from those ranges after the final pulse.
+    values[:, second_pulse_sample_num:, 0] = values[:, second_pulse_sample_num:, -1]
+
     return values
 
 
