@@ -127,9 +127,9 @@ def convert_record(record, averaging_method):
                                                                      record)
 
     if averaging_method == 'median':
-        main_corrs = np.median(main_corrs_unavg, axis=0)
-        intf_corrs = np.median(intf_corrs_unavg, axis=0)
-        cross_corrs = np.median(cross_corrs_unavg, axis=0)
+        main_corrs = np.median(np.real(main_corrs_unavg), axis=0) + 1j * np.median(np.imag(main_corrs_unavg), axis=0)
+        intf_corrs = np.median(np.real(intf_corrs_unavg), axis=0) + 1j * np.median(np.imag(intf_corrs_unavg), axis=0)
+        cross_corrs = np.median(np.real(cross_corrs_unavg), axis=0) + 1j * np.median(np.imag(cross_corrs_unavg), axis=0)
     else:
         # Using mean averaging
         main_corrs = np.einsum('ijkl->jkl', main_corrs_unavg) / num_sequences
@@ -156,6 +156,7 @@ def convert_record(record, averaging_method):
     del record['num_ranges']
     del record['num_samps']
     del record['pulse_phase_offset']
+    del record['antenna_arrays_order']
 
     # Fix representation of empty dictionary if no slice interfacing present
     slice_interfacing = record['slice_interfacing']
