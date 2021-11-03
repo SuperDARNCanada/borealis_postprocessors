@@ -247,8 +247,8 @@ def convert_file(filename: str, output_file: str, file_type: str, final_type: st
 
             # Process bfiq -> rawacf
             # Check the averaging method provided
-            avg_method = kwargs['averaging_method']
-            if avg_method is not None:
+            if 'averaging_method' in kwargs.keys():
+                avg_method = kwargs['averaging_method']
                 if avg_method not in ['mean', 'median']:
                     raise ValueError('kwarg "averaging_method" not an acceptable value. '
                                      'Acceptable values are "mean" and "median".')
