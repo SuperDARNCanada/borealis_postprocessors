@@ -110,8 +110,8 @@ def beamform(antennas_data, beamdirs, rxfreq, antenna_spacing, pulse_phase_offse
                                       0.0,
                                       num_antennas,
                                       antenna_spacing)
-            # Bring into range (-2*pi, 2*pi) and negate
-            phase_shift = math.fmod((-1 * phase_shift), 2 * math.pi)
+            # Bring into range (-2*pi, 2*pi)
+            phase_shift = math.fmod(phase_shift, 2 * math.pi)
             antenna_phase_shifts.append(phase_shift)
 
         # TODO: Figure out decoding phase here
