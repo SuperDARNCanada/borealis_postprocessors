@@ -9,7 +9,7 @@ import argparse
 import os
 import pydarnio
 from exceptions import conversion_exceptions
-from data_processing import antennas_iq_to_bfiq, bfiq_to_rawacf
+from data_processing import convert_antennas_iq, convert_bfiq
 
 SUPPORTED_FILE_TYPES = [
     'antennas_iq',
