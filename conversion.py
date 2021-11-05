@@ -8,6 +8,8 @@ SuperDARN data files.
 import argparse
 import os
 import pydarnio
+
+from data_processing.convert_antennas_iq import ConvertAntennasIQ
 from exceptions import conversion_exceptions
 from data_processing import convert_antennas_iq, convert_bfiq
 
@@ -114,8 +116,6 @@ class ConvertFile(object):
         'site'
         'dmap'
         All borealis files are either 'site' or 'array' structured.
-        If not provided, it will try 'array' first, then 'site',
-        then 'dmap'.
     final_structure: str
         The desired structure of the output file. Same structures as
         above.
@@ -198,7 +198,8 @@ class ConvertFile(object):
         """
         # TODO: Add arguments to these once the classes are created
         if self.file_type == 'antennas_iq':
-            return ConvertAntennasIQ()
+            return ConvertAntennasIQ(self.filename, self.output_file, self.final_type,
+                                     self.file_structure, self.final_structure)
         elif self.file_type == 'bfiq':
             return ConvertBfiq()
         else:
