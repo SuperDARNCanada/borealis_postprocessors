@@ -76,14 +76,42 @@ class ConvertBfiq(object):
 
     @staticmethod
     def get_correlation_descriptors() -> list:
+        """
+        Returns a list of descriptors corresponding to correlation data dimensions.
+        """
         return ['num_beams', 'num_ranges', 'num_lags']
 
     @staticmethod
     def get_correlation_dimensions(record: OrderedDict) -> np.array:
+        """
+        Returns the dimensions of correlation data.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing bfiq data and metadata
+
+        Returns
+        -------
+        Array of ints characterizing the data dimensions
+        """
         return np.array([len(record['beam_azms']), record['num_ranges'], len(record['lags'])], dtype=np.uint32)
 
     @staticmethod
     def remove_extra_fields(record: OrderedDict) -> OrderedDict:
+        """
+        Removes fields not needed by the rawacf data format.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing bfiq data and metadata
+
+        Returns
+        -------
+        record: OrderedDict
+            hdf5 record without fields that aren't in the rawacf format
+        """
         record.pop('data')
         record.pop('data_descriptors')
         record.pop('data_dimensions')
@@ -101,15 +129,19 @@ class ConvertBfiq(object):
         Correlate two sets of beamformed samples together. Correlation matrices are used and
         indices corresponding to lag pulse pairs are extracted.
 
-        :param      beamformed_samples_1:  The first beamformed samples.
-        :type       beamformed_samples_1:  ndarray [num_slices, num_beams, num_samples]
-        :param      beamformed_samples_2:  The second beamformed samples.
-        :type       beamformed_samples_2:  ndarray [num_slices, num_beams, num_samples]
-        :param      record:                Details used to extract indices for each slice.
-        :type       record:                dictionary
+        Parameters
+        ----------
+        beamformed_samples_1: ndarray [num_slices, num_beams, num_samples]
+            The first beamformed samples.
+        beamformed_samples_2: ndarray [num_slices, num_beams, num_samples]
+            The second beamformed samples.
+        record: OrderedDict
+            hdf5 record containing bfiq data and metadata
 
-        :returns:   Correlations.
-        :rtype:     list
+        Returns
+        -------
+        values: np.array
+            Array of correlations for each beam, range, and lag
         """
 
         # beamformed_samples_1: [num_beams, num_samples]
@@ -160,6 +192,25 @@ class ConvertBfiq(object):
 
     @staticmethod
     def calculate_correlations(record: OrderedDict, averaging_method: str) -> tuple:
+        """
+        Calculates the auto- and cross-correlations for main and interferometer arrays given the bfiq data in record.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing bfiq data and metadata
+        averaging_method: str
+            Averaging method. Supported types are 'mean' and 'median'
+
+        Returns
+        -------
+        main_acfs: np.array
+            Autocorrelation of the main array data
+        intf_acfs: np.array
+            Autocorrelation of the interferometer array data
+        xcfs: np.array
+            Cross-correlation of the main and interferometer arrays
+        """
         # TODO: Figure out how to remove pulse offsets
         pulse_phase_offset = record['pulse_phase_offset']
         if pulse_phase_offset is None:
@@ -216,9 +267,17 @@ class ConvertBfiq(object):
         """
         Takes a record from a bfiq file and processes it into record for rawacf file.
 
-        :param record:              Borealis bfiq record
-        :param averaging_method:    Either 'mean' or 'median'
-        :return:                    Record of rawacf data for rawacf site file
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing bfiq data and metadata
+        averaging_method: str
+            Averaging method to use. Supported methods are 'mean' and 'median'
+
+        Returns
+        -------
+        record: OrderedDict
+            record converted to rawacf format
         """
 
         record['averaging_method'] = averaging_method
@@ -238,13 +297,12 @@ class ConvertBfiq(object):
         """
         Converts a bfiq site file to rawacf site file
 
-        :param infile:              Borealis bfiq site file
-        :type  infile:              String
-        :param outfile:             Borealis bfiq site file
-        :type  outfile:             String
-        :param averaging_method:    Method to average over a sequence. Either 'mean' or 'median'
-        :type  averaging_method:    String
-        :return:                    Path to rawacf site file
+        Parameters
+        ----------
+        outfile: str
+            Borealis rawacf site file
+        averaging_method: str
+            Method to average over a sequence. Either 'mean' or 'median'
         """
 
         def convert_to_numpy(data):
