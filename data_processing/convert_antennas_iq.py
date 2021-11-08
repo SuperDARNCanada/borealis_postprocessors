@@ -86,18 +86,30 @@ class ConvertAntennasIQ(object):
         Form the beam given the beam direction (degrees off boresite), the tx frequency, the antenna number,
         a specified extra phase shift if there is any, the number of antennas in the array, and the spacing
         between antennas.
-        :param beamdir: the azimuthal direction of the beam off boresight, in degrees, positive beamdir being to
+
+        Parameters
+        ----------
+        beamdir: float
+            The azimuthal direction of the beam off boresight, in degrees, positive beamdir being to
             the right of the boresight (looking along boresight from ground). This is for this antenna.
-        :param freq: transmit frequency in kHz
-        :param antenna: antenna number, INDEXED FROM ZERO, zero being the leftmost antenna if looking down the boresight
+        freq: float
+            Transmit frequency in kHz
+        antenna: int
+            Antenna number, INDEXED FROM ZERO, zero being the leftmost antenna if looking down the boresight
             and positive beamdir right of boresight
-        :param pulse_shift: in degrees, for phase encoding
-        :param num_antennas: number of antennas in this array
-        :param antenna_spacing: distance between antennas in this array, in meters
-        :param centre_offset: the phase reference for the midpoint of the array. Default = 0.0, in metres.
-         Important if there is a shift in centre point between arrays in the direction along the array.
-         Positive is shifted to the right when looking along boresight (from the ground).
-        :returns phshift: a phase shift for the samples for this antenna number, in radians.
+        num_antennas: int
+            Number of antennas in this array
+        antenna_spacing: float
+            Distance between antennas in this array, in meters
+        centre_offset: float
+            The phase reference for the midpoint of the array. Default = 0.0, in metres.
+            Important if there is a shift in centre point between arrays in the direction along the array.
+            Positive is shifted to the right when looking along boresight (from the ground).
+
+        Returns
+        -------
+        phshift: float
+            A phase shift for the samples for this antenna number, in radians.
         """
         freq = freq * 1000.0  # convert to Hz.
 
@@ -115,16 +127,25 @@ class ConvertAntennasIQ(object):
         return phshift
 
     @staticmethod
-    def shift_samples(basic_samples, phshift, amplitude):
+    def shift_samples(basic_samples: np.array, phshift: float, amplitude: float = 1.) -> np.array:
         """
         Shift samples for a pulse by a given phase shift.
         Take the samples and shift by given phase shift in rads and adjust amplitude as
         required for imaging.
-        :param basic_samples: samples for this pulse, numpy array
-        :param phshift: phase for this antenna to offset by in rads, float
-        :param amplitude: amplitude for this antenna (= 1 if not imaging), float
-        :returns samples: basic_samples that have been shaped for the antenna for the
-         desired beam.
+
+        Parameters
+        ----------
+        basic_samples: np.array
+            Samples for this pulse
+        phshift: float
+            phase for this antenna to offset by in rads
+        amplitude: float
+            Amplitude for this antenna (= 1 if not imaging)
+
+        Returns
+        -------
+        samples: np.array
+            Basic_samples that have been shaped for the antenna for the desired beam.
         """
         samples = amplitude * np.exp(1j * phshift) * basic_samples
 
@@ -133,13 +154,24 @@ class ConvertAntennasIQ(object):
     @staticmethod
     def beamform(antennas_data: np.array, beamdirs: np.array, rxfreq: float, antenna_spacing: float) -> np.array:
         """
-        :param antennas_data: numpy array of dimensions num_antennas x num_samps. All antennas are assumed to be
-        from the same array and are assumed to be side by side with antenna spacing 15.24 m, pulse_shift = 0.0
-        :param beamdirs: list of azimuthal beam directions in degrees off boresite
-        :param rxfreq: frequency to beamform at.
-        :param antenna_spacing: spacing in metres between antennas, used to get the phase shift that
-        corresponds to an azimuthal direction.
-        :param pulse_phase_offset: offset phase to adjust beams by. degrees
+        Beamforms the data from each antenna and sums to create one dataset for each beam direction.
+
+        Parameters
+        ----------
+        antennas_data: np.array
+            Numpy array of dimensions num_antennas x num_samps. All antennas are assumed to be from the same array
+            and are assumed to be side by side with uniform antenna spacing
+        beamdirs: np.array
+            Azimuthal beam directions in degrees off boresight
+        rxfreq: float
+            Frequency of the received beam
+        antenna_spacing: float
+            Spacing in metres between antennas (assumed uniform)
+
+        Returns
+        -------
+        beamformed_data: np.array
+            Array of shape [num_beams, num_samps]
         """
         beamformed_data = []
 
@@ -176,7 +208,17 @@ class ConvertAntennasIQ(object):
     @staticmethod
     def calculate_first_range(record: OrderedDict) -> float:
         """
-        Calculates the first range and stores it in the record
+        Calculates the distance from the main array to the first range (in km).
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        first_range: float
+            Distance to first range in km
         """
         # TODO: Get this from somewhere
         first_range = 180.0  # scf.FIRST_RANGE
@@ -186,7 +228,17 @@ class ConvertAntennasIQ(object):
     @staticmethod
     def calculate_first_range_rtt(record: OrderedDict) -> OrderedDict:
         """
-        Calculates the round-trip time to the first range in a record.
+        Calculates the round-trip time (in microseconds) to the first range in a record.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        first_range_rtt: float
+            Time that it takes signal to travel to first range gate and back, in microseconds
         """
         # km * (there and back) * (km to meters) * (seconds to us) / c
         first_range_rtt = record['first_range'] * 2.0 * 1.0e3 * 1e6 / speed_of_light
@@ -197,6 +249,20 @@ class ConvertAntennasIQ(object):
     def create_lag_table(record: OrderedDict) -> np.array:
         """
         Creates the lag table for the record.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        lags: np.array
+            Array of lag pairs for the record. Each pair is formatted as [0, 1], where
+            the first number is the index of the first pulse in units of tau, and the second number
+            is the index of the second pulse in units of tau. The lag pairs start with [0, 0], then
+            are sorted in ascending order based on difference between the pulses, and finally appended
+            with an alternate lag-zero pulse [last_pulse, last_pulse].
         """
         lag_table = list(itertools.combinations(record['pulses'], 2))   # Create all combinations of lags
         lag_table.append([record['pulses'][0], record['pulses'][0]])    # lag 0
@@ -209,7 +275,17 @@ class ConvertAntennasIQ(object):
     @staticmethod
     def calculate_range_separation(record: OrderedDict) -> float:
         """
-        Calculates the separation between ranges in km
+        Calculates the separation between ranges in km.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        range_sep: float
+            The separation between adjacent ranges, in km.
         """
         # (1 / (sample rate)) * c / (km to meters) / 2
         range_sep = 1 / record['rx_sample_rate'] * speed_of_light / 1.0e3 / 2.0
@@ -219,8 +295,17 @@ class ConvertAntennasIQ(object):
     @staticmethod
     def get_number_of_ranges(record: OrderedDict) -> int:
         """
-        Gets the number of ranges for the beamformed data
-        :return:
+        Gets the number of ranges for the record.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        num_ranges: int
+            The number of ranges of the data
         """
         # TODO: Do this intelligently. Maybe grab from githash and cpid? Have default values too
         #   Could get this from the number of samples in a file?
@@ -238,6 +323,11 @@ class ConvertAntennasIQ(object):
     def change_data_descriptors() -> list:
         """
         Returns the proper data descriptors for a bfiq file
+
+        Returns
+        -------
+        new_descriptors: list
+            List of descriptors for data dimensions of bfiq file
         """
         new_descriptors = ['num_antenna_arrays', 'num_sequences', 'num_beams', 'num_samps']
 
@@ -246,7 +336,17 @@ class ConvertAntennasIQ(object):
     @staticmethod
     def get_data_dimensions(record: OrderedDict):
         """
-        Returns a list of the new data dimensions for a bfiq file
+        Returns a list of the new data dimensions for a bfiq record.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        new_dimensions: np.array
+            Dimensions of data in bfiq record
         """
         # Old dimensions: [num_antennas, num_sequences, num_samps]
         # New dimensions: [num_antenna_arrays, num_sequences, num_beams, num_samps]
@@ -261,6 +361,10 @@ class ConvertAntennasIQ(object):
     def change_antenna_arrays_order() -> list:
         """
         Returns the correct field 'antenna_arrays_order' for a bfiq file
+
+        Returns
+        -------
+        List of array names
         """
         return ['main', 'intf']
 
@@ -268,7 +372,16 @@ class ConvertAntennasIQ(object):
     def beamform_data(record: OrderedDict) -> np.array:
         """
         Beamforms the data for each array, and stores it back into the record
-        :return:
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        all_data: np.array
+            Array containing all data after beamforming, and grouped by antenna array.
         """
         beam_azms = record['beam_azms']
         freq = record['freq']
@@ -316,8 +429,15 @@ class ConvertAntennasIQ(object):
         """
         Takes a record from an antennas_iq file and beamforms the data.
 
-        :param record:      Borealis antennas_iq record
-        :return:            Record of beamformed data for bfiq site file
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        record: OrderedDict
+            hdf5 record, with new fields required by bfiq data format
         """
         record['first_range'] = ConvertAntennasIQ.calculate_first_range(record)
         record['first_range_rtt'] = ConvertAntennasIQ.calculate_first_range_rtt(record)
@@ -335,9 +455,10 @@ class ConvertAntennasIQ(object):
         """
         Converts an antennas_iq site file to bfiq site file
 
-        :param outfile:     Borealis bfiq site file
-        :type  outfile:     String
-        :return:            Path to bfiq site file
+        Parameters
+        ----------
+        outfile: str
+            Name of borealis bfiq hdf5 site file
         """
         def convert_to_numpy(data):
             """Converts lists stored in dict into numpy array. Recursive.
