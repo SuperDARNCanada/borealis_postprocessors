@@ -114,6 +114,7 @@ class ConvertFile(object):
 
     def __init__(self, filename: str, output_file: str, file_type: str, final_type: str,
                  file_structure: str, final_structure: str, averaging_method: str = 'mean'):
+        self.check_args(filename, file_type, final_type, file_structure, final_structure)
         self.filename = filename
         self.output_file = output_file
         self.file_type = file_type
@@ -123,52 +124,6 @@ class ConvertFile(object):
         self.averaging_method = averaging_method
         self._temp_files = []
 
-        if not os.path.isfile(self.filename):
-            raise conversion_exceptions.FileDoesNotExistError(
-                'Input file {}'.format(self.filename)
-            )
-        if self.file_type not in FILE_TYPE_MAPPING.keys():
-            raise conversion_exceptions.ImproperFileTypeError(
-                'Input file type "{}" not supported. Supported types '
-                'are {}'
-                ''.format(self.file_type, FILE_TYPE_MAPPING.keys())
-            )
-        if self.final_type not in FILE_TYPE_MAPPING.keys():
-            raise conversion_exceptions.ImproperFileTypeError(
-                'Output file type "{}" not supported. Supported types '
-                'are {}'
-                ''.format(self.final_type, FILE_TYPE_MAPPING.keys())
-            )
-        if self.file_structure not in FILE_STRUCTURE_MAPPING[self.file_type]:
-            raise conversion_exceptions.ImproperFileStructureError(
-                'Input file structure "{structure}" is not compatible with '
-                'input file type "{type}": Valid structures for {type} are '
-                '{valid}'.format(structure=self.file_structure,
-                                 type=self.file_type,
-                                 valid=FILE_STRUCTURE_MAPPING[self.file_type])
-            )
-        if self.final_type not in FILE_TYPE_MAPPING[self.file_type]:
-            raise conversion_exceptions.ConversionUpstreamError(
-                'Conversion from {filetype} to {final_type} is '
-                'not supported. Only downstream processing is '
-                'possible. Downstream types for {filetype} are'
-                '{downstream}'.format(filetype=self.file_type,
-                                      final_type=self.final_type,
-                                      downstream=FILE_TYPE_MAPPING[self.final_type])
-            )
-        if self.final_structure not in FILE_STRUCTURE_MAPPING[self.final_type]:
-            raise conversion_exceptions.ImproperFileStructureError(
-                'Output file structure "{structure}" is not compatible with '
-                'output file type "{type}": Valid structures for {type} are '
-                '{valid}'.format(structure=self.final_structure,
-                                 type=self.final_type,
-                                 valid=FILE_STRUCTURE_MAPPING[self.final_type])
-            )
-        if self.file_type == self.final_type and self.file_structure == self.final_structure:
-            raise conversion_exceptions.NoConversionNecessaryError(
-                'Desired output format is same as input format.'
-            )
-
         self._converter = self.get_converter()
 
     def _remove_temp_files(self):
@@ -177,6 +132,54 @@ class ConvertFile(object):
         """
         for filename in self._temp_files:
             os.remove(filename)
+
+    @staticmethod
+    def check_args(filename, file_type, final_type, file_structure, final_structure):
+        if not os.path.isfile(filename):
+            raise conversion_exceptions.FileDoesNotExistError(
+                'Input file {}'.format(filename)
+            )
+        if file_type not in FILE_TYPE_MAPPING.keys():
+            raise conversion_exceptions.ImproperFileTypeError(
+                'Input file type "{}" not supported. Supported types '
+                'are {}'
+                ''.format(file_type, FILE_TYPE_MAPPING.keys())
+            )
+        if final_type not in FILE_TYPE_MAPPING.keys():
+            raise conversion_exceptions.ImproperFileTypeError(
+                'Output file type "{}" not supported. Supported types '
+                'are {}'
+                ''.format(final_type, FILE_TYPE_MAPPING.keys())
+            )
+        if file_structure not in FILE_STRUCTURE_MAPPING[file_type]:
+            raise conversion_exceptions.ImproperFileStructureError(
+                'Input file structure "{structure}" is not compatible with '
+                'input file type "{type}": Valid structures for {type} are '
+                '{valid}'.format(structure=file_structure,
+                                 type=file_type,
+                                 valid=FILE_STRUCTURE_MAPPING[file_type])
+            )
+        if final_type not in FILE_TYPE_MAPPING[file_type]:
+            raise conversion_exceptions.ConversionUpstreamError(
+                'Conversion from {filetype} to {final_type} is '
+                'not supported. Only downstream processing is '
+                'possible. Downstream types for {filetype} are'
+                '{downstream}'.format(filetype=file_type,
+                                      final_type=final_type,
+                                      downstream=FILE_TYPE_MAPPING[final_type])
+            )
+        if final_structure not in FILE_STRUCTURE_MAPPING[final_type]:
+            raise conversion_exceptions.ImproperFileStructureError(
+                'Output file structure "{structure}" is not compatible with '
+                'output file type "{type}": Valid structures for {type} are '
+                '{valid}'.format(structure=final_structure,
+                                 type=final_type,
+                                 valid=FILE_STRUCTURE_MAPPING[final_type])
+            )
+        if file_type == final_type and file_structure == final_structure:
+            raise conversion_exceptions.NoConversionNecessaryError(
+                'Desired output format is same as input format.'
+            )
 
     def get_converter(self):
         """
