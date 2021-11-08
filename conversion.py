@@ -12,19 +12,6 @@ import pydarnio
 from data_processing.convert_antennas_iq import ConvertAntennasIQ
 from data_processing.convert_bfiq import ConvertBfiq
 from exceptions import conversion_exceptions
-from data_processing import convert_antennas_iq, convert_bfiq
-
-SUPPORTED_FILE_TYPES = [
-    'antennas_iq',
-    'bfiq',
-    'rawacf'
-]
-
-SUPPORTED_FILE_STRUCTURES = [
-    'array',
-    'site',
-    'dmap'
-]
 
 # Keys are valid input file types, values are lists of allowed
 # output file types. A file of type 'key' can be processed into
@@ -150,7 +137,7 @@ class ConvertFile(object):
             raise conversion_exceptions.ImproperFileTypeError(
                 'Output file type "{}" not supported. Supported types '
                 'are {}'
-                ''.format(self.final_type, SUPPORTED_FILE_TYPES)
+                ''.format(self.final_type, FILE_TYPE_MAPPING.keys())
             )
         if self.file_structure not in FILE_STRUCTURE_MAPPING[self.file_type]:
             raise conversion_exceptions.ImproperFileStructureError(
@@ -237,124 +224,12 @@ def restructure_file(self, filename: str, output_file: str, file_type: str, file
     pydarnio.BorealisWrite(output_file, data, file_type, final_structure)
 
 
-def antiq2bfiq(filename: str, output_file: str, file_structure: str, final_structure: str):
-    """
-    Converts an antennas_iq file to bfiq file.
-
-    :param filename:            Name of antennas_iq file. String
-    :param output_file:         Name of bfiq file. String
-    :param file_structure:      Structure of antennas_iq file. String
-    :param final_structure:     Structure of bfiq file. String
-    :return:
-    """
-    file_type = 'antennas_iq'
-    final_type = 'bfiq'
-    temp_files = []
-
-    # Convert array files to site files for processing
-    if file_structure == 'array':
-        site_file = '/tmp/tmp.antennas_iq'
-        temp_files.append(site_file)
-        restructure_file(filename, site_file, file_type, file_structure, 'site')
-    else:
-        site_file = filename
-
-    # Determine name for the bfiq file
-    if final_structure == 'site':
-        bfiq_file = output_file
-    else:
-        bfiq_file = '/tmp/tmp.bfiq'
-        temp_files.append(bfiq_file)
-
-    # Convert antennas_iq.site file to bfiq.site file
-    try:
-        antennas_iq_to_bfiq.antennas_iq_to_bfiq(site_file, bfiq_file)
-    except Exception:
-        # Remove any temporary files before halting
-        remove_temp_files(temp_files)
-        raise
-
-    # Restructure the file to final_structure
-    restructure_file(bfiq_file, output_file, final_type, 'site', final_structure)
-
-    # Remove any temporary files made along the way
-    remove_temp_files(temp_files)
-
-
-def bfiq2rawacf(filename: str, output_file: str, file_structure: str, final_structure: str,
-                averaging_method: str = 'mean'):
-    """
-    Converts a bfiq file into a rawacf file.
-
-    :param filename:            Name of the bfiq file. String
-    :param output_file:         Name of the rawacf file. String
-    :param file_structure:      Structure of the bfiq file. String
-    :param final_structure:     Structure of the rawacf file. String
-    :param averaging_method:    Averaging method for generating correlations. String
-    """
-    file_type = 'bfiq'
-    final_type = 'rawacf'
-    temp_files = []
-
-    # Convert array files to site files for processing
-    if file_structure == 'array':
-        site_file = '/tmp/tmp.bfiq'
-        temp_files.append(site_file)
-        restructure_file(filename, site_file, file_type, file_structure, 'site')
-    else:
-        site_file = filename
-
-    # Determine name for the bfiq file
-    if final_structure == 'site':
-        rawacf_file = output_file
-    else:
-        rawacf_file = '/tmp/tmp.bfiq'
-        temp_files.append(rawacf_file)
-
-    # Convert antennas_iq.site file to bfiq.site file
-    try:
-        bfiq_to_rawacf.bfiq_to_rawacf(site_file, rawacf_file, averaging_method=averaging_method)
-    except Exception:
-        # Remove any temporary files before halting
-        remove_temp_files(temp_files)
-        raise
-
-    # Restructure the file to its final structure
-    restructure_file(rawacf_file, output_file, final_type, 'site', final_structure)
-
-    # Remove any temporary files made along the way
-    remove_temp_files(temp_files)
-
-
-def antiq2rawacf(filename: str, output_file: str, file_type: str, final_type: str,
-                 file_structure: str, final_structure: str, averaging_method: str = 'mean'):
-
-    # Set up intermediate bfiq file
-    bfiq_file = '/tmp/tmp.bfiq'
-    bfiq_structure = 'site'
-    temp_files = [bfiq_file]
-
-    # Convert to bfiq file
-    try:
-        antiq2bfiq(filename, bfiq_file, file_structure, bfiq_structure)
-
-        # Convert bfiq file to rawacf file
-        bfiq2rawacf(bfiq_file, output_file, bfiq_structure, final_structure, averaging_method=averaging_method)
-    except Exception:
-        # Remove temporary files before halting.
-        remove_temp_files(temp_files)
-        raise
-
-    # Remove bfiq file
-    remove_temp_files(temp_files)
-
-
 def main():
     parser = conversion_parser()
     args = parser.parse_args()
 
     ConvertFile(args.infile, args.outfile, args.filetype, args.final_type, args.file_structure, args.final_structure,
-                 averaging_method=args.averaging_method)
+                averaging_method=args.averaging_method)
 
 
 if __name__ == "__main__":
