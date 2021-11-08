@@ -10,6 +10,7 @@ import os
 import pydarnio
 
 from data_processing.convert_antennas_iq import ConvertAntennasIQ
+from data_processing.convert_bfiq import ConvertBfiq
 from exceptions import conversion_exceptions
 from data_processing import convert_antennas_iq, convert_bfiq
 
@@ -201,7 +202,8 @@ class ConvertFile(object):
             return ConvertAntennasIQ(self.filename, self.output_file, self.final_type,
                                      self.file_structure, self.final_structure)
         elif self.file_type == 'bfiq':
-            return ConvertBfiq()
+            return ConvertBfiq(self.filename, self.output_file, self.final_type,
+                               self.file_structure, self.final_structure, self.averaging_method)
         else:
             return ConvertRawacf()
 
