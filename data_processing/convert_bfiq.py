@@ -4,16 +4,13 @@
 This file contains functions for converting bfiq files
 to rawacf files.
 """
-import itertools
 import logging
 from collections import OrderedDict
-from typing import Union
 
 import numpy as np
 import os
 import subprocess as sp
 import deepdish as dd
-from scipy.constants import speed_of_light
 
 try:
     import cupy as xp
