@@ -14,7 +14,7 @@ import numpy as np
 import deepdish as dd
 from scipy.constants import speed_of_light
 
-from exceptions import processing_exceptions
+# from exceptions import processing_exceptions
 
 try:
     import cupy as xp
@@ -76,6 +76,7 @@ class ConvertAntennasIQ(object):
         self._temp_files = []
 
         # TODO: Figure out how to differentiate between restructuring and processing
+        self.process_to_bfiq(self.output_file)
 
     @staticmethod
     def get_phshift(beamdir: float, freq: float, antenna: int, num_antennas: int, antenna_spacing: float,
@@ -189,7 +190,8 @@ class ConvertAntennasIQ(object):
         """
         # km * (there and back) * (km to meters) * (seconds to us) / c
         first_range_rtt = record['first_range'] * 2.0 * 1.0e3 * 1e6 / speed_of_light
-        record['first_range_rtt'] = np.float32(first_range_rtt)
+
+        return np.float32(first_range_rtt)
 
     @staticmethod
     def create_lag_table(record: OrderedDict) -> np.array:
