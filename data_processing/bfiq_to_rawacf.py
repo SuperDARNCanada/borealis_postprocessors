@@ -215,6 +215,9 @@ class ProcessBfiq2Rawacf(BaseConvert):
             values.append(xp.array([]))
             return values
 
+        pulses = record['pulses']
+        pulse_phase_offsets = record['pulse_phase_offset']
+
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
         sample_off = xp.int32(sample_off)
@@ -237,6 +240,15 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
         # [num_beams, num_range_gates, num_lags]
         values = correlated[:, row, column]
+
+        # Remove phase encoding
+        for lagnum, lag in enumerate(record['lags']):
+            # Get phase offset for both pulses which contributed to the correlations for this lag
+            phase1 = pulse_phase_offsets[pulses.index(lag[0])]
+            phase2 = pulse_phase_offsets[pulses.index(lag[1])]
+
+            # Remove the phase encoding
+            values[:, :, lag] = values[:, :, lag] * np.exp(1j * (phase1 - phase2))
 
         # Find the sample that corresponds to the second pulse transmitting
         second_pulse_sample_num = xp.int32(tau_in_samples) * record['pulses'][1] - sample_off - 1
