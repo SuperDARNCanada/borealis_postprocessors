@@ -1,5 +1,5 @@
 # Copyright 2021 SuperDARN Canada, University of Saskatchewan
-# Author: Marci Detwiller
+# Author: Marci Detwiller, Remington Rohel
 """
 This file contains functions for converting antennas_iq files
 to bfiq files.
