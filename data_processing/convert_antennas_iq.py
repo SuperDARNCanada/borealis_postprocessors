@@ -78,6 +78,192 @@ class ConvertAntennasIQ(object):
         # TODO: Figure out how to differentiate between restructuring and processing
         self.process_to_bfiq(self.output_file)
 
+    def process_to_bfiq(self, outfile: str):
+        """
+        Converts an antennas_iq site file to bfiq site file
+
+        Parameters
+        ----------
+        outfile: str
+            Name of borealis bfiq hdf5 site file
+        """
+        def convert_to_numpy(data):
+            """Converts lists stored in dict into numpy array. Recursive.
+            Args:
+                data (Python dictionary): Dictionary with lists to convert to numpy arrays.
+            """
+            for k, v in data.items():
+                if isinstance(v, dict):
+                    convert_to_numpy(v)
+                elif isinstance(v, list):
+                    data[k] = np.array(v)
+                else:
+                    continue
+            return data
+
+        postprocessing_logger.info('Converting file {} to bfiq'.format(self.filename))
+
+        # Load file to read in records
+        bfiq_group = dd.io.load(self.filename)
+        records = bfiq_group.keys()
+
+        # Convert each record to bfiq record
+        for record in records:
+            record_dict = bfiq_group[record]
+            beamformed_record = self.beamform_record(record_dict)
+
+            # Convert to numpy arrays for saving to file with deepdish
+            formatted_record = convert_to_numpy(beamformed_record)
+
+            # Save record to temporary file
+            tempfile = '/tmp/{}.tmp'.format(record)
+            dd.io.save(tempfile, formatted_record, compression=None)
+
+            # Copy record to output file
+            cmd = 'h5copy -i {} -o {} -s {} -d {}'
+            cmd = cmd.format(tempfile, outfile, '/', '/{}'.format(record))
+            sp.call(cmd.split())
+
+            # Remove temporary file
+            os.remove(tempfile)
+
+    @staticmethod
+    def beamform_record(record: OrderedDict) -> OrderedDict:
+        """
+        Takes a record from an antennas_iq file and beamforms the data.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        record: OrderedDict
+            hdf5 record, with new fields required by bfiq data format
+        """
+        record['first_range'] = ConvertAntennasIQ.calculate_first_range(record)
+        record['first_range_rtt'] = ConvertAntennasIQ.calculate_first_range_rtt(record)
+        record['lags'] = ConvertAntennasIQ.create_lag_table(record)
+        record['range_sep'] = ConvertAntennasIQ.calculate_range_separation(record)
+        record['num_ranges'] = ConvertAntennasIQ.get_number_of_ranges(record)
+        record['data'] = ConvertAntennasIQ.beamform_data(record)
+        record['data_descriptors'] = ConvertAntennasIQ.change_data_descriptors()
+        record['data_dimensions'] = ConvertAntennasIQ.get_data_dimensions(record)
+        record['antenna_arrays_order'] = ConvertAntennasIQ.change_antenna_arrays_order()
+
+        return record
+
+    @staticmethod
+    def beamform_data(record: OrderedDict) -> np.array:
+        """
+        Beamforms the data for each array, and stores it back into the record
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        all_data: np.array
+            Array containing all data after beamforming, and grouped by antenna array.
+        """
+        beam_azms = record['beam_azms']
+        freq = record['freq']
+        pulse_phase_offset = record['pulse_phase_offset']
+        if pulse_phase_offset is None:
+            pulse_phase_offset = [0.0] * len(record['pulses'])
+
+        # antennas data shape  = [num_antennas, num_sequences, num_samps]
+        antennas_data = record['data']
+
+        # Get the data and reshape
+        num_antennas, num_sequences, num_samps = record['data_dimensions']
+        antennas_data = antennas_data.reshape(record['data_dimensions'])
+
+        main_beamformed_data = np.array([], dtype=np.complex64)
+        intf_beamformed_data = np.array([], dtype=np.complex64)
+        main_antenna_count = record['main_antenna_count']
+
+        # TODO: Grab these values from somewhere
+        main_antenna_spacing = 15.24
+        intf_antenna_spacing = 15.24
+
+        # Loop through every sequence and beamform the data.
+        # Output shape after loop is [num_sequences, num_beams, num_samps]
+        for sequence in range(num_sequences):
+            # data input shape  = [num_antennas, num_samps]
+            # data return shape = [num_beams, num_samps]
+            main_beamformed_data = np.append(main_beamformed_data,
+                                             ConvertAntennasIQ.beamform(antennas_data[:main_antenna_count, sequence, :],
+                                                                        beam_azms,
+                                                                        freq,
+                                                                        main_antenna_spacing))
+            intf_beamformed_data = np.append(intf_beamformed_data,
+                                             ConvertAntennasIQ.beamform(antennas_data[main_antenna_count:, sequence, :],
+                                                                        beam_azms,
+                                                                        freq,
+                                                                        intf_antenna_spacing))
+
+        all_data = np.append(main_beamformed_data, intf_beamformed_data).flatten()
+
+        return all_data
+
+    @staticmethod
+    def beamform(antennas_data: np.array, beamdirs: np.array, rxfreq: float, antenna_spacing: float) -> np.array:
+        """
+        Beamforms the data from each antenna and sums to create one dataset for each beam direction.
+
+        Parameters
+        ----------
+        antennas_data: np.array
+            Numpy array of dimensions num_antennas x num_samps. All antennas are assumed to be from the same array
+            and are assumed to be side by side with uniform antenna spacing
+        beamdirs: np.array
+            Azimuthal beam directions in degrees off boresight
+        rxfreq: float
+            Frequency of the received beam
+        antenna_spacing: float
+            Spacing in metres between antennas (assumed uniform)
+
+        Returns
+        -------
+        beamformed_data: np.array
+            Array of shape [num_beams, num_samps]
+        """
+        beamformed_data = []
+
+        # [num_antennas, num_samps]
+        num_antennas, num_samps = antennas_data.shape
+
+        # Loop through all beam directions
+        for beam_direction in beamdirs:
+            antenna_phase_shifts = []
+
+            # Get phase shift for each antenna
+            for antenna in range(num_antennas):
+                phase_shift = ConvertAntennasIQ.get_phshift(beam_direction,
+                                                            rxfreq,
+                                                            antenna,
+                                                            num_antennas,
+                                                            antenna_spacing)
+                # Bring into range (-2*pi, 2*pi)
+                phase_shift = math.fmod(phase_shift, 2 * math.pi)
+                antenna_phase_shifts.append(phase_shift)
+
+            # Apply phase shift to data from respective antenna
+            phased_antenna_data = [ConvertAntennasIQ.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
+                                   for i in range(num_antennas)]
+            phased_antenna_data = np.array(phased_antenna_data)
+
+            # Sum across antennas to get beamformed data
+            one_beam_data = np.sum(phased_antenna_data, axis=0)
+            beamformed_data.append(one_beam_data)
+        beamformed_data = np.array(beamformed_data)
+
+        return beamformed_data
+
     @staticmethod
     def get_phshift(beamdir: float, freq: float, antenna: int, num_antennas: int, antenna_spacing: float,
                     centre_offset: int = 0.0) -> float:
@@ -150,60 +336,6 @@ class ConvertAntennasIQ(object):
         samples = amplitude * np.exp(1j * phshift) * basic_samples
 
         return samples
-
-    @staticmethod
-    def beamform(antennas_data: np.array, beamdirs: np.array, rxfreq: float, antenna_spacing: float) -> np.array:
-        """
-        Beamforms the data from each antenna and sums to create one dataset for each beam direction.
-
-        Parameters
-        ----------
-        antennas_data: np.array
-            Numpy array of dimensions num_antennas x num_samps. All antennas are assumed to be from the same array
-            and are assumed to be side by side with uniform antenna spacing
-        beamdirs: np.array
-            Azimuthal beam directions in degrees off boresight
-        rxfreq: float
-            Frequency of the received beam
-        antenna_spacing: float
-            Spacing in metres between antennas (assumed uniform)
-
-        Returns
-        -------
-        beamformed_data: np.array
-            Array of shape [num_beams, num_samps]
-        """
-        beamformed_data = []
-
-        # [num_antennas, num_samps]
-        num_antennas, num_samps = antennas_data.shape
-
-        # Loop through all beam directions
-        for beam_direction in beamdirs:
-            antenna_phase_shifts = []
-
-            # Get phase shift for each antenna
-            for antenna in range(num_antennas):
-                phase_shift = ConvertAntennasIQ.get_phshift(beam_direction,
-                                                            rxfreq,
-                                                            antenna,
-                                                            num_antennas,
-                                                            antenna_spacing)
-                # Bring into range (-2*pi, 2*pi)
-                phase_shift = math.fmod(phase_shift, 2 * math.pi)
-                antenna_phase_shifts.append(phase_shift)
-
-            # Apply phase shift to data from respective antenna
-            phased_antenna_data = [ConvertAntennasIQ.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
-                                   for i in range(num_antennas)]
-            phased_antenna_data = np.array(phased_antenna_data)
-
-            # Sum across antennas to get beamformed data
-            one_beam_data = np.sum(phased_antenna_data, axis=0)
-            beamformed_data.append(one_beam_data)
-        beamformed_data = np.array(beamformed_data)
-
-        return beamformed_data
 
     @staticmethod
     def calculate_first_range(record: OrderedDict) -> float:
@@ -367,135 +499,3 @@ class ConvertAntennasIQ(object):
         List of array names
         """
         return ['main', 'intf']
-
-    @staticmethod
-    def beamform_data(record: OrderedDict) -> np.array:
-        """
-        Beamforms the data for each array, and stores it back into the record
-
-        Parameters
-        ----------
-        record: OrderedDict
-            hdf5 record containing antennas_iq data and metadata
-
-        Returns
-        -------
-        all_data: np.array
-            Array containing all data after beamforming, and grouped by antenna array.
-        """
-        beam_azms = record['beam_azms']
-        freq = record['freq']
-        pulse_phase_offset = record['pulse_phase_offset']
-        if pulse_phase_offset is None:
-            pulse_phase_offset = [0.0] * len(record['pulses'])
-
-        # antennas data shape  = [num_antennas, num_sequences, num_samps]
-        antennas_data = record['data']
-
-        # Get the data and reshape
-        num_antennas, num_sequences, num_samps = record['data_dimensions']
-        antennas_data = antennas_data.reshape(record['data_dimensions'])
-
-        main_beamformed_data = np.array([], dtype=np.complex64)
-        intf_beamformed_data = np.array([], dtype=np.complex64)
-        main_antenna_count = record['main_antenna_count']
-
-        # TODO: Grab these values from somewhere
-        main_antenna_spacing = 15.24
-        intf_antenna_spacing = 15.24
-
-        # Loop through every sequence and beamform the data.
-        # Output shape after loop is [num_sequences, num_beams, num_samps]
-        for sequence in range(num_sequences):
-            # data input shape  = [num_antennas, num_samps]
-            # data return shape = [num_beams, num_samps]
-            main_beamformed_data = np.append(main_beamformed_data,
-                                             ConvertAntennasIQ.beamform(antennas_data[:main_antenna_count, sequence, :],
-                                                                        beam_azms,
-                                                                        freq,
-                                                                        main_antenna_spacing))
-            intf_beamformed_data = np.append(intf_beamformed_data,
-                                             ConvertAntennasIQ.beamform(antennas_data[main_antenna_count:, sequence, :],
-                                                                        beam_azms,
-                                                                        freq,
-                                                                        intf_antenna_spacing))
-
-        all_data = np.append(main_beamformed_data, intf_beamformed_data).flatten()
-
-        return all_data
-
-    @staticmethod
-    def beamform_record(record: OrderedDict) -> OrderedDict:
-        """
-        Takes a record from an antennas_iq file and beamforms the data.
-
-        Parameters
-        ----------
-        record: OrderedDict
-            hdf5 record containing antennas_iq data and metadata
-
-        Returns
-        -------
-        record: OrderedDict
-            hdf5 record, with new fields required by bfiq data format
-        """
-        record['first_range'] = ConvertAntennasIQ.calculate_first_range(record)
-        record['first_range_rtt'] = ConvertAntennasIQ.calculate_first_range_rtt(record)
-        record['lags'] = ConvertAntennasIQ.create_lag_table(record)
-        record['range_sep'] = ConvertAntennasIQ.calculate_range_separation(record)
-        record['num_ranges'] = ConvertAntennasIQ.get_number_of_ranges(record)
-        record['data'] = ConvertAntennasIQ.beamform_data(record)
-        record['data_descriptors'] = ConvertAntennasIQ.change_data_descriptors()
-        record['data_dimensions'] = ConvertAntennasIQ.get_data_dimensions(record)
-        record['antenna_arrays_order'] = ConvertAntennasIQ.change_antenna_arrays_order()
-
-        return record
-
-    def process_to_bfiq(self, outfile: str):
-        """
-        Converts an antennas_iq site file to bfiq site file
-
-        Parameters
-        ----------
-        outfile: str
-            Name of borealis bfiq hdf5 site file
-        """
-        def convert_to_numpy(data):
-            """Converts lists stored in dict into numpy array. Recursive.
-            Args:
-                data (Python dictionary): Dictionary with lists to convert to numpy arrays.
-            """
-            for k, v in data.items():
-                if isinstance(v, dict):
-                    convert_to_numpy(v)
-                elif isinstance(v, list):
-                    data[k] = np.array(v)
-                else:
-                    continue
-            return data
-
-        postprocessing_logger.info('Converting file {} to bfiq'.format(self.filename))
-
-        # Load file to read in records
-        bfiq_group = dd.io.load(self.filename)
-        records = bfiq_group.keys()
-
-        # Convert each record to bfiq record
-        for record in records:
-            record_dict = bfiq_group[record]
-            beamformed_record = self.beamform_record(record_dict)
-
-            # Convert to numpy arrays for saving to file with deepdish
-            formatted_record = convert_to_numpy(beamformed_record)
-
-            # Save record to temporary file
-            tempfile = '/tmp/{}.tmp'.format(record)
-            dd.io.save(tempfile, formatted_record, compression=None)
-
-            # Copy record to output file
-            cmd = 'h5copy -i {} -o {} -s {} -d {}'
-            cmd = cmd.format(tempfile, outfile, '/', '/{}'.format(record))
-            sp.call(cmd.split())
-
-            # Remove temporary file
-            os.remove(tempfile)
