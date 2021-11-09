@@ -70,122 +70,87 @@ class ConvertBfiq(object):
         # TODO: Figure out how to differentiate between restructuring and processing
         self.process_to_rawacf(self.output_file, self.averaging_method)
 
+    def process_to_rawacf(self, outfile: str, averaging_method: str):
+        """
+        Converts a bfiq site file to rawacf site file
+
+        Parameters
+        ----------
+        outfile: str
+            Borealis rawacf site file
+        averaging_method: str
+            Method to average over a sequence. Either 'mean' or 'median'
+        """
+
+        def convert_to_numpy(data):
+            """Converts lists stored in dict into numpy array. Recursive.
+            Args:
+                data (Python dictionary): Dictionary with lists to convert to numpy arrays.
+            """
+            for k, v in data.items():
+                if isinstance(v, dict):
+                    convert_to_numpy(v)
+                elif isinstance(v, list):
+                    data[k] = np.array(v)
+                else:
+                    continue
+            return data
+
+        postprocessing_logger.info('Converting file {} to bfiq'.format(self.filename))
+
+        # Load file to read in records
+        group = dd.io.load(self.filename)
+        records = group.keys()
+
+        # Convert each record to bfiq record
+        for record in records:
+            correlated_record = self.convert_record(group[record], averaging_method)
+
+            # Convert to numpy arrays for saving to file with deepdish
+            formatted_record = convert_to_numpy(correlated_record)
+
+            # Save record to temporary file
+            tempfile = '/tmp/{}.tmp'.format(record)
+            dd.io.save(tempfile, formatted_record, compression=None)
+
+            # Copy record to output file
+            cmd = 'h5copy -i {} -o {} -s {} -d {}'
+            cmd = cmd.format(tempfile, outfile, '/', '/{}'.format(record))
+            sp.call(cmd.split())
+
+            # Remove temporary file
+            os.remove(tempfile)
 
     @staticmethod
-    def get_correlation_descriptors() -> list:
+    def convert_record(record: OrderedDict, averaging_method: str) -> OrderedDict:
         """
-        Returns a list of descriptors corresponding to correlation data dimensions.
-        """
-        return ['num_beams', 'num_ranges', 'num_lags']
-
-    @staticmethod
-    def get_correlation_dimensions(record: OrderedDict) -> np.array:
-        """
-        Returns the dimensions of correlation data.
+        Takes a record from a bfiq file and processes it into record for rawacf file.
 
         Parameters
         ----------
         record: OrderedDict
             hdf5 record containing bfiq data and metadata
-
-        Returns
-        -------
-        Array of ints characterizing the data dimensions
-        """
-        return np.array([len(record['beam_azms']), record['num_ranges'], len(record['lags'])], dtype=np.uint32)
-
-    @staticmethod
-    def remove_extra_fields(record: OrderedDict) -> OrderedDict:
-        """
-        Removes fields not needed by the rawacf data format.
-
-        Parameters
-        ----------
-        record: OrderedDict
-            hdf5 record containing bfiq data and metadata
+        averaging_method: str
+            Averaging method to use. Supported methods are 'mean' and 'median'
 
         Returns
         -------
         record: OrderedDict
-            hdf5 record without fields that aren't in the rawacf format
+            record converted to rawacf format
         """
-        record.pop('data')
-        record.pop('data_descriptors')
-        record.pop('data_dimensions')
-        record.pop('num_ranges')
-        record.pop('num_samps')
-        record.pop('pulse_phase_offset')
-        record.pop('antenna_arrays_order')
+
+        record['averaging_method'] = averaging_method
+
+        correlations = ConvertBfiq.calculate_correlations(record, averaging_method)
+        record['main_acfs'] = correlations[0]
+        record['intf_acfs'] = correlations[1]
+        record['xcfs'] = correlations[2]
+
+        record['correlation_descriptors'] = ConvertBfiq.get_correlation_descriptors()
+        record['correlation_dimensions'] = ConvertBfiq.get_correlation_dimensions(record)
+        record = ConvertBfiq.remove_extra_fields(record)
 
         return record
-
-    @staticmethod
-    def correlations_from_samples(beamformed_samples_1: np.array, beamformed_samples_2: np.array,
-                                  record: OrderedDict) -> np.array:
-        """
-        Correlate two sets of beamformed samples together. Correlation matrices are used and
-        indices corresponding to lag pulse pairs are extracted.
-
-        Parameters
-        ----------
-        beamformed_samples_1: ndarray [num_slices, num_beams, num_samples]
-            The first beamformed samples.
-        beamformed_samples_2: ndarray [num_slices, num_beams, num_samples]
-            The second beamformed samples.
-        record: OrderedDict
-            hdf5 record containing bfiq data and metadata
-
-        Returns
-        -------
-        values: np.array
-            Array of correlations for each beam, range, and lag
-        """
-
-        # beamformed_samples_1: [num_beams, num_samples]
-        # beamformed_samples_2: [num_beams, num_samples]
-        # correlated:           [num_beams, num_samples, num_samples]
-        correlated = xp.einsum('jk,jl->jlk', beamformed_samples_1.conj(),
-                               beamformed_samples_2)
-
-        if cupy_available:
-            correlated = xp.asnumpy(correlated)
-
-        values = []
-        if record['lags'].size == 0:
-            values.append(np.array([]))
-            return values
-
-        # First range offset in samples
-        sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
-        sample_off = np.int32(sample_off)
-
-        # Helpful values converted to units of samples
-        range_off = np.arange(record['num_ranges'], dtype=np.int32) + sample_off
-        tau_in_samples = record['tau_spacing'] * 1e-6 * record['rx_sample_rate']
-        lag_pulses_as_samples = np.array(record['lags'], np.int32) * np.int32(tau_in_samples)
-
-        # [num_range_gates, 1, 1]
-        # [1, num_lags, 2]
-        samples_for_all_range_lags = (range_off[..., np.newaxis, np.newaxis] +
-                                      lag_pulses_as_samples[np.newaxis, :, :])
-
-        # [num_range_gates, num_lags, 2]
-        row = samples_for_all_range_lags[..., 1].astype(np.int32)
-
-        # [num_range_gates, num_lags, 2]
-        column = samples_for_all_range_lags[..., 0].astype(np.int32)
-
-        # [num_beams, num_range_gates, num_lags]
-        values = correlated[:, row, column]
-
-        # Find the sample that corresponds to the second pulse transmitting
-        second_pulse_sample_num = np.int32(tau_in_samples) * record['pulses'][1] - sample_off - 1
-
-        # Replace all ranges which are contaminated by the second pulse for lag 0
-        # with the data from those ranges after the final pulse.
-        values[:, second_pulse_sample_num:, 0] = values[:, second_pulse_sample_num:, -1]
-
-        return values
 
     @staticmethod
     def calculate_correlations(record: OrderedDict, averaging_method: str) -> tuple:
@@ -260,83 +225,117 @@ class ConvertBfiq(object):
         return main_acfs, intf_acfs, xcfs
 
     @staticmethod
-    def convert_record(record: OrderedDict, averaging_method: str) -> OrderedDict:
+    def correlations_from_samples(beamformed_samples_1: np.array, beamformed_samples_2: np.array,
+                                  record: OrderedDict) -> np.array:
         """
-        Takes a record from a bfiq file and processes it into record for rawacf file.
+        Correlate two sets of beamformed samples together. Correlation matrices are used and
+        indices corresponding to lag pulse pairs are extracted.
+
+        Parameters
+        ----------
+        beamformed_samples_1: ndarray [num_slices, num_beams, num_samples]
+            The first beamformed samples.
+        beamformed_samples_2: ndarray [num_slices, num_beams, num_samples]
+            The second beamformed samples.
+        record: OrderedDict
+            hdf5 record containing bfiq data and metadata
+
+        Returns
+        -------
+        values: np.array
+            Array of correlations for each beam, range, and lag
+        """
+
+        # beamformed_samples_1: [num_beams, num_samples]
+        # beamformed_samples_2: [num_beams, num_samples]
+        # correlated:           [num_beams, num_samples, num_samples]
+        correlated = xp.einsum('jk,jl->jlk', beamformed_samples_1.conj(),
+                               beamformed_samples_2)
+
+        if cupy_available:
+            correlated = xp.asnumpy(correlated)
+
+        values = []
+        if record['lags'].size == 0:
+            values.append(np.array([]))
+            return values
+
+        # First range offset in samples
+        sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
+        sample_off = np.int32(sample_off)
+
+        # Helpful values converted to units of samples
+        range_off = np.arange(record['num_ranges'], dtype=np.int32) + sample_off
+        tau_in_samples = record['tau_spacing'] * 1e-6 * record['rx_sample_rate']
+        lag_pulses_as_samples = np.array(record['lags'], np.int32) * np.int32(tau_in_samples)
+
+        # [num_range_gates, 1, 1]
+        # [1, num_lags, 2]
+        samples_for_all_range_lags = (range_off[..., np.newaxis, np.newaxis] +
+                                      lag_pulses_as_samples[np.newaxis, :, :])
+
+        # [num_range_gates, num_lags, 2]
+        row = samples_for_all_range_lags[..., 1].astype(np.int32)
+
+        # [num_range_gates, num_lags, 2]
+        column = samples_for_all_range_lags[..., 0].astype(np.int32)
+
+        # [num_beams, num_range_gates, num_lags]
+        values = correlated[:, row, column]
+
+        # Find the sample that corresponds to the second pulse transmitting
+        second_pulse_sample_num = np.int32(tau_in_samples) * record['pulses'][1] - sample_off - 1
+
+        # Replace all ranges which are contaminated by the second pulse for lag 0
+        # with the data from those ranges after the final pulse.
+        values[:, second_pulse_sample_num:, 0] = values[:, second_pulse_sample_num:, -1]
+
+        return values
+
+    @staticmethod
+    def get_correlation_descriptors() -> list:
+        """
+        Returns a list of descriptors corresponding to correlation data dimensions.
+        """
+        return ['num_beams', 'num_ranges', 'num_lags']
+
+    @staticmethod
+    def get_correlation_dimensions(record: OrderedDict) -> np.array:
+        """
+        Returns the dimensions of correlation data.
 
         Parameters
         ----------
         record: OrderedDict
             hdf5 record containing bfiq data and metadata
-        averaging_method: str
-            Averaging method to use. Supported methods are 'mean' and 'median'
+
+        Returns
+        -------
+        Array of ints characterizing the data dimensions
+        """
+        return np.array([len(record['beam_azms']), record['num_ranges'], len(record['lags'])], dtype=np.uint32)
+
+    @staticmethod
+    def remove_extra_fields(record: OrderedDict) -> OrderedDict:
+        """
+        Removes fields not needed by the rawacf data format.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing bfiq data and metadata
 
         Returns
         -------
         record: OrderedDict
-            record converted to rawacf format
+            hdf5 record without fields that aren't in the rawacf format
         """
-
-        record['averaging_method'] = averaging_method
-
-        correlations = ConvertBfiq.calculate_correlations(record, averaging_method)
-        record['main_acfs'] = correlations[0]
-        record['intf_acfs'] = correlations[1]
-        record['xcfs'] = correlations[2]
-
-        record['correlation_descriptors'] = ConvertBfiq.get_correlation_descriptors()
-        record['correlation_dimensions'] = ConvertBfiq.get_correlation_dimensions(record)
-        record = ConvertBfiq.remove_extra_fields(record)
+        record.pop('data')
+        record.pop('data_descriptors')
+        record.pop('data_dimensions')
+        record.pop('num_ranges')
+        record.pop('num_samps')
+        record.pop('pulse_phase_offset')
+        record.pop('antenna_arrays_order')
 
         return record
-
-    def process_to_rawacf(self, outfile: str, averaging_method: str):
-        """
-        Converts a bfiq site file to rawacf site file
-
-        Parameters
-        ----------
-        outfile: str
-            Borealis rawacf site file
-        averaging_method: str
-            Method to average over a sequence. Either 'mean' or 'median'
-        """
-
-        def convert_to_numpy(data):
-            """Converts lists stored in dict into numpy array. Recursive.
-            Args:
-                data (Python dictionary): Dictionary with lists to convert to numpy arrays.
-            """
-            for k, v in data.items():
-                if isinstance(v, dict):
-                    convert_to_numpy(v)
-                elif isinstance(v, list):
-                    data[k] = np.array(v)
-                else:
-                    continue
-            return data
-
-        postprocessing_logger.info('Converting file {} to bfiq'.format(self.filename))
-
-        # Load file to read in records
-        group = dd.io.load(self.filename)
-        records = group.keys()
-
-        # Convert each record to bfiq record
-        for record in records:
-            correlated_record = self.convert_record(group[record], averaging_method)
-
-            # Convert to numpy arrays for saving to file with deepdish
-            formatted_record = convert_to_numpy(correlated_record)
-
-            # Save record to temporary file
-            tempfile = '/tmp/{}.tmp'.format(record)
-            dd.io.save(tempfile, formatted_record, compression=None)
-
-            # Copy record to output file
-            cmd = 'h5copy -i {} -o {} -s {} -d {}'
-            cmd = cmd.format(tempfile, outfile, '/', '/{}'.format(record))
-            sp.call(cmd.split())
-
-            # Remove temporary file
-            os.remove(tempfile)
