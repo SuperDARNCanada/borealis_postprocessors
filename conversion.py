@@ -57,17 +57,20 @@ def conversion_parser():
                              "(e.g. 20190327.2210.38.sas.0.rawacf.hdf5.site)")
     parser.add_argument("--filetype", required=True,
                         help="Type of input file. Acceptable types are 'antennas_iq', 'bfiq', and 'rawacf'.")
-    parser.add_argument("--final_type", required=True,
+    parser.add_argument("--final-type", required=True,
                         help="Type of output file. Acceptable types are 'antennas_iq', 'bfiq', and 'rawacf'.")
-    parser.add_argument("--file_structure", required=True,
+    parser.add_argument("--file-structure", required=True,
                         help="Structure of input file. Acceptable structures are "
                              "'array', 'site', and 'dmap' (dmap for rawacf type only).")
-    parser.add_argument("--final_structure", required=True,
+    parser.add_argument("--final-structure", required=True,
                         help="Structure of output file. Acceptable structures are 'array', 'site', "
                              "and 'dmap' (dmap for rawacf type only).")
-    parser.add_argument("--averaging_method", required=False, default='mean',
+    parser.add_argument("--averaging-method", required=False, default='mean',
                         help="Averaging method for generating rawacf type file. Allowed "
                              "methods are 'mean' (default) and 'median'.")
+    parser.add_argument("--save-intermediate-files", action='store_true',
+                        help='Save intermediate files generated in processing chain. E.g. if processing antennas_iq '
+                             '-> rawacf, save the bfiq file generated in between.')
 
     return parser
 
@@ -113,7 +116,8 @@ class ConvertFile(object):
     """
 
     def __init__(self, filename: str, output_file: str, file_type: str, final_type: str,
-                 file_structure: str, final_structure: str, averaging_method: str = 'mean'):
+                 file_structure: str, final_structure: str, averaging_method: str = 'mean',
+                 save_intermediate_files: bool = False):
         self.check_args(filename, file_type, final_type, file_structure, final_structure)
         self.filename = filename
         self.output_file = output_file
@@ -122,6 +126,7 @@ class ConvertFile(object):
         self.file_structure = file_structure
         self.final_structure = final_structure
         self.averaging_method = averaging_method
+        self.save_intermediate_files = save_intermediate_files
         self._temp_files = []
 
         self._converter = self.get_converter()
@@ -130,8 +135,9 @@ class ConvertFile(object):
         """
         Deletes all temporary files used in the conversion chain.
         """
-        for filename in self._temp_files:
-            os.remove(filename)
+        if not self.save_intermediate_files:
+            for filename in self._temp_files:
+                os.remove(filename)
 
     @staticmethod
     def check_args(filename, file_type, final_type, file_structure, final_structure):
@@ -232,7 +238,7 @@ def main():
     args = parser.parse_args()
 
     ConvertFile(args.infile, args.outfile, args.filetype, args.final_type, args.file_structure, args.final_structure,
-                averaging_method=args.averaging_method)
+                averaging_method=args.averaging_method, save_intermediate_files=args.save_intermediate_files)
 
 
 if __name__ == "__main__":
