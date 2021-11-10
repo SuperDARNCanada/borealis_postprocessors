@@ -59,7 +59,8 @@ class BaseConvert(object):
         The write structure of the file. Structures include:
         'array'
         'site'
-        'dmap'
+        'iqdat' (bfiq only)
+        'dmap' (rawacf only)
         All borealis files are either 'site' or 'array' structured.
     final_structure: str
         The desired structure of the output file. Same structures as
@@ -88,8 +89,11 @@ class BaseConvert(object):
             'array'
             'site'
         final_structure: str
-            Borealis file structure of output file. Supported structures are same as file_structure,
-            with the addition of 'dmap' for rawacf-type files.
+            Borealis file structure of output file. Supported structures are:
+            'array'
+            'site'
+            'iqdat' (bfiq only)
+            'dmap' (rawacf only)
         """
         self.filename = filename
         self.output_file = output_file
@@ -236,8 +240,8 @@ class BaseConvert(object):
         final_structure: str
             The desired write structure of the file. One of 'array', 'site', 'iqdat', or 'dmap'.
         """
-        # Dmap is handled specially, since it has its own function in pydarnio
-        if final_structure == 'dmap':
+        # dmap and iqdat are not borealis formats, so they are handled specially
+        if final_structure == 'dmap' or final_structure == 'iqdat':
             pydarnio.BorealisConvert(infile_name, file_type, outfile_name,
                                      borealis_file_structure=file_structure)
             return
@@ -306,7 +310,7 @@ class BaseConvert(object):
         """
         file_structure_mapping = {
             'antennas_iq': ['site', 'array'],
-            'bfiq': ['site', 'array'],
+            'bfiq': ['site', 'array', 'iqdat'],
             'rawacf': ['site', 'array', 'dmap']
         }
 

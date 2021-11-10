@@ -50,7 +50,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         'array'
         'site'
     final_structure: str
-        The desired structure of the output file. Same structures as above.
+        The desired structure of the output file. Same structures as above, plus 'iqdat'.
     """
 
     def __init__(self, filename: str, output_file: str, file_structure: str, final_structure: str):
@@ -66,7 +66,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         file_structure: str
             Borealis structure of input file. Either 'array' or 'site'.
         final_structure: str
-            Borealis structure of output file. Either 'array', 'site', or 'dmap'.
+            Borealis structure of output file. Either 'array', 'site', or 'iqdat'.
         """
         super().__init__(filename, output_file, 'antennas_iq', 'bfiq', file_structure, final_structure)
 

@@ -47,7 +47,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
         'site'
     final_structure: str
         The desired structure of the output file. Same structures as
-        above, with the addition of 'dmap' for rawacf files.
+        above, with the addition of 'dmap'.
     averaging_method: str
         Averaging method for computing correlations (for processing into rawacf files).
         Acceptable values are 'mean' and 'median'.

@@ -25,9 +25,8 @@ def usage_msg():
     usage_message = """ conversion.py [-h] infile outfile file_type final_type file_structure final_structure [averaging_method]
     
     Pass in the filename you wish to convert, the filename you wish to save as, and the types and structures of both.
-    The script will :
-    1. convert the input file into an output file of type "final_type" and structure "final_structure". If
-       the final type is rawacf, the averaging method may optionally be specified as well (default is mean). """
+    The script will convert the input file into an output file of type "final_type" and structure "final_structure". If 
+    the final type is rawacf, the averaging method may optionally be specified as well (default is mean). """
 
     return usage_message
 
@@ -45,10 +44,10 @@ def conversion_parser():
                         help="Type of output file. Acceptable types are 'antennas_iq', 'bfiq', and 'rawacf'.")
     parser.add_argument("--file-structure", required=True,
                         help="Structure of input file. Acceptable structures are "
-                             "'array', 'site', and 'dmap' (dmap for rawacf type only).")
+                             "'array' and 'site'")
     parser.add_argument("--final-structure", required=True,
                         help="Structure of output file. Acceptable structures are 'array', 'site', "
-                             "and 'dmap' (dmap for rawacf type only).")
+                             "'iqdat' (bfiq only) and 'dmap' (rawacf only).")
     parser.add_argument("--averaging-method", required=False, default='mean',
                         help="Averaging method for generating rawacf type file. Allowed "
                              "methods are 'mean' (default) and 'median'.")
@@ -86,11 +85,12 @@ class ConvertFile(object):
         The write structure of the file. Structures include:
         'array'
         'site'
-        'dmap'
-        All borealis files are either 'site' or 'array' structured.
     final_structure: str
-        The desired structure of the output file. Same structures as
-        above.
+        The desired structure of the output file. Structures supported are:
+        'array'
+        'site'
+        'iqdat' (bfiq only)
+        'dmap' (rawacf only)
     averaging_method: str
         Averaging method for computing correlations (for processing into rawacf files).
         Acceptable values are 'mean' and 'median'.
