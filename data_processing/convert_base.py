@@ -13,6 +13,8 @@ import numpy as np
 import deepdish as dd
 import pydarnio
 
+from exceptions import conversion_exceptions
+
 try:
     import cupy as xp
 except ImportError:
@@ -95,8 +97,35 @@ class BaseConvert(object):
         self.file_structure = file_structure
         self.final_type = final_type
         self.final_structure = final_structure
+        self.check_args()
+
         self.averaging_method = None
         self._temp_files = []
+
+    def check_args(self):
+        file_structure_mapping = BaseConvert.structure_mapping()
+
+        if self.file_structure not in file_structure_mapping[self.file_type]:
+            raise conversion_exceptions.ImproperFileStructureError(
+                'Input file structure "{structure}" is not compatible with '
+                'input file type "{type}": Valid structures for {type} are '
+                '{valid}'.format(structure=self.file_structure,
+                                 type=self.file_type,
+                                 valid=file_structure_mapping[self.file_type])
+            )
+        if self.final_structure not in file_structure_mapping[self.final_type]:
+            raise conversion_exceptions.ImproperFileStructureError(
+                'Output file structure "{structure}" is not compatible with '
+                'output file type "{type}": Valid structures for {type} are '
+                '{valid}'.format(structure=self.final_structure,
+                                 type=self.final_type,
+                                 valid=file_structure_mapping[self.final_type])
+            )
+        if self.file_structure not in ['array', 'site']:
+            raise conversion_exceptions.ConversionUpstreamError(
+                'Input file structure "{}" cannot be reprocessed into any other ' 
+                'format.'.format(self.file_structure)
+            )
 
     def process_file(self):
         """
@@ -240,3 +269,45 @@ class BaseConvert(object):
                 continue
         
         return data
+
+    @staticmethod
+    def type_mapping():
+        """
+        Returns a dictionary mapping the accepted borealis file types to
+        the borealis file types that they can be processed into. The dictionary
+        keys are the valid input file types, and their values are lists of
+        file types which they can be processed into.
+
+        Returns
+        -------
+        file_type_mapping: dict
+            Mapping of input file types to allowed output file types.
+        """
+        file_type_mapping = {
+            'antennas_iq': ['antennas_iq', 'bfiq', 'rawacf'],
+            'bfiq': ['bfiq', 'rawacf'],
+            'rawacf': ['rawacf']
+        }
+
+        return file_type_mapping
+
+    @staticmethod
+    def structure_mapping():
+        """
+        Returns a dictionary mapping the accepted borealis file types to
+        the borealis file structures that they can be formatted as. The dictionary
+        keys are the valid input file types, and their values are lists of
+        file structures which they can be formatted as.
+
+        Returns
+        -------
+        file_structure_mapping: dict
+            Mapping of input file types to allowed output file types.
+        """
+        file_structure_mapping = {
+            'antennas_iq': ['site', 'array'],
+            'bfiq': ['site', 'array'],
+            'rawacf': ['site', 'array', 'dmap']
+        }
+
+        return file_structure_mapping

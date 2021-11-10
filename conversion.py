@@ -14,23 +14,6 @@ from data_processing.convert_base import BaseConvert
 from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
 from exceptions import conversion_exceptions
 
-# Keys are valid input file types, values are lists of allowed
-# output file types. A file of type 'key' can be processed into
-# any type in 'value'.
-FILE_TYPE_MAPPING = {
-    'antennas_iq': ['antennas_iq', 'bfiq', 'rawacf'],
-    'bfiq': ['bfiq', 'rawacf'],
-    'rawacf': ['rawacf']
-}
-
-# Keys are valid input file types, and values are lists of
-# supported file structures for the file type.
-FILE_STRUCTURE_MAPPING = {
-    'antennas_iq': ['site', 'array'],
-    'bfiq': ['site', 'array'],
-    'rawacf': ['site', 'array', 'dmap']
-}
-
 
 def usage_msg():
     """
@@ -115,7 +98,6 @@ class ConvertFile(object):
 
     def __init__(self, filename: str, output_file: str, file_type: str, final_type: str,
                  file_structure: str, final_structure: str, averaging_method: str = 'mean'):
-        self.check_args(filename, file_type, final_type, file_structure, final_structure)
         self.filename = filename
         self.output_file = output_file
         self.file_type = file_type
@@ -125,65 +107,35 @@ class ConvertFile(object):
         self.averaging_method = averaging_method
         self._temp_files = []
 
-        self._converter = self.get_converter()
-
-    @staticmethod
-    def check_args(filename, file_type, final_type, file_structure, final_structure):
-        if not os.path.isfile(filename):
+        if not os.path.isfile(self.filename):
             raise conversion_exceptions.FileDoesNotExistError(
-                'Input file {}'.format(filename)
+                'Input file {}'.format(self.filename)
             )
-        if file_type not in FILE_TYPE_MAPPING.keys():
-            raise conversion_exceptions.ImproperFileTypeError(
-                'Input file type "{}" not supported. Supported types '
-                'are {}'
-                ''.format(file_type, FILE_TYPE_MAPPING.keys())
-            )
-        if final_type not in FILE_TYPE_MAPPING.keys():
-            raise conversion_exceptions.ImproperFileTypeError(
-                'Output file type "{}" not supported. Supported types '
-                'are {}'
-                ''.format(final_type, FILE_TYPE_MAPPING.keys())
-            )
-        if file_structure not in FILE_STRUCTURE_MAPPING[file_type]:
-            raise conversion_exceptions.ImproperFileStructureError(
-                'Input file structure "{structure}" is not compatible with '
-                'input file type "{type}": Valid structures for {type} are '
-                '{valid}'.format(structure=file_structure,
-                                 type=file_type,
-                                 valid=FILE_STRUCTURE_MAPPING[file_type])
-            )
-        if final_type not in FILE_TYPE_MAPPING[file_type]:
-            raise conversion_exceptions.ConversionUpstreamError(
-                'Conversion from {filetype} to {final_type} is '
-                'not supported. Only downstream processing is '
-                'possible. Downstream types for {filetype} are'
-                '{downstream}'.format(filetype=file_type,
-                                      final_type=final_type,
-                                      downstream=FILE_TYPE_MAPPING[final_type])
-            )
-        if final_structure not in FILE_STRUCTURE_MAPPING[final_type]:
-            raise conversion_exceptions.ImproperFileStructureError(
-                'Output file structure "{structure}" is not compatible with '
-                'output file type "{type}": Valid structures for {type} are '
-                '{valid}'.format(structure=final_structure,
-                                 type=final_type,
-                                 valid=FILE_STRUCTURE_MAPPING[final_type])
-            )
-        if file_type == final_type and file_structure == final_structure:
-            raise conversion_exceptions.NoConversionNecessaryError(
-                'Desired output format is same as input format.'
-            )
-        # TODO: Catch case where dmap file is input (can't convert dmap to hdf5)
+
+        self._converter = self.get_converter()
 
     def get_converter(self):
         """
         Determines the correct class of converter to instantiate based on the attributes
         of the ConvertFiles object.
-        :return: Instantiated converter object
+
+        Returns
+        -------
+        Instantiated converter object
         """
+        if self.final_type not in BaseConvert.type_mapping().keys():
+            raise conversion_exceptions.ImproperFileTypeError(
+                'Output file type "{}" not supported. Supported types '
+                'are {}'
+                ''.format(self.final_type, list(BaseConvert.type_mapping().keys()))
+            )
+
         # Only restructuring necessary
         if self.file_type == self.final_type:
+            if self.file_structure == self.final_structure:
+                raise conversion_exceptions.NoConversionNecessaryError(
+                    'Desired output format is same as input format.'
+                )
             return BaseConvert.restructure(self.filename, self.output_file, self.file_type, self.file_structure,
                                            self.final_structure)
 
@@ -191,14 +143,38 @@ class ConvertFile(object):
             if self.final_type == 'bfiq':
                 return ProcessAntennasIQ2Bfiq(self.filename, self.output_file, self.file_structure,
                                               self.final_structure)
-            else:
+            elif self.final_type == 'rawacf':
                 return ProcessAntennasIQ2Rawacf(self.filename, self.output_file, self.file_structure,
                                                 self.final_structure, self.averaging_method)
+            else:
+                raise conversion_exceptions.ConversionUpstreamError(
+                    'Conversion from {filetype} to {final_type} is '
+                    'not supported. Only downstream processing is '
+                    'possible. Downstream types for {filetype} are '
+                    '{downstream}'.format(filetype=self.file_type,
+                                          final_type=self.final_type,
+                                          downstream=BaseConvert.type_mapping()[self.final_type])
+                )
         elif self.file_type == 'bfiq':
-            return ProcessBfiq2Rawacf(self.filename, self.output_file, self.file_structure, self.final_structure,
-                                      self.averaging_method)
+            if self.final_type == 'rawacf':
+                return ProcessBfiq2Rawacf(self.filename, self.output_file, self.file_structure, self.final_structure,
+                                          self.averaging_method)
+            else:
+                raise conversion_exceptions.ConversionUpstreamError(
+                    'Conversion from {filetype} to {final_type} is '
+                    'not supported. Only downstream processing is '
+                    'possible. Downstream types for {filetype} are '
+                    '{downstream}'.format(filetype=self.file_type,
+                                          final_type=self.final_type,
+                                          downstream=BaseConvert.type_mapping()[self.final_type])
+                )
+
         else:
-            raise ValueError('Improper file type {}'.format(self.file_type))
+            raise conversion_exceptions.ImproperFileTypeError(
+                'Input file type "{}" not supported. Supported types '
+                'are {}'
+                ''.format(self.file_type, list(BaseConvert.type_mapping().keys()))
+            )
 
 
 def main():
