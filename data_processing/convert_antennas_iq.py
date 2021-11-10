@@ -5,7 +5,6 @@ This file contains functions for converting antennas_iq files
 to bfiq files.
 """
 import itertools
-import math
 from collections import OrderedDict
 from typing import Union
 
@@ -183,7 +182,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
                                                                  num_antennas,
                                                                  antenna_spacing)
                 # Bring into range (-2*pi, 2*pi)
-                phase_shift = math.fmod(phase_shift, 2 * math.pi)
+                phase_shift = np.fmod(phase_shift, 2 * np.pi)
                 antenna_phase_shifts.append(phase_shift)
 
             # Apply phase shift to data from respective antenna
@@ -234,15 +233,15 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         freq = freq * 1000.0  # convert to Hz.
 
         # Convert to radians
-        beamrad = math.pi * np.float64(beamdir) / 180.0
+        beamrad = np.pi * np.float64(beamdir) / 180.0
 
         # Pointing to right of boresight, use point in middle (hypothetically antenna 7.5) as phshift=0
-        phshift = 2 * math.pi * freq * \
+        phshift = 2 * np.pi * freq * \
                   (((num_antennas - 1) / 2.0 - antenna) * antenna_spacing + centre_offset) * \
-                  math.cos(math.pi / 2.0 - beamrad) / speed_of_light
+                  np.cos(np.pi / 2.0 - beamrad) / speed_of_light
 
         # Bring into range (-2*pi, 2*pi)
-        phshift = math.fmod(phshift, 2 * math.pi)
+        phshift = np.fmod(phshift, 2 * np.pi)
 
         return phshift
 
