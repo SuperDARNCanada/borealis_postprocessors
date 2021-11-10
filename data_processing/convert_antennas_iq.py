@@ -5,19 +5,15 @@ This file contains functions for converting antennas_iq files
 to bfiq files.
 """
 import itertools
-import subprocess as sp
 import math
-import os
 from collections import OrderedDict
 from typing import Union
 
 import numpy as np
-import deepdish as dd
 from scipy.constants import speed_of_light
 
 from data_processing.convert_base import BaseConvert
 
-# from exceptions import processing_exceptions
 
 try:
     import cupy as xp

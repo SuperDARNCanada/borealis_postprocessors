@@ -11,9 +11,6 @@ from typing import Union
 from data_processing.convert_base import BaseConvert
 
 import numpy as np
-import os
-import subprocess as sp
-import deepdish as dd
 
 try:
     import cupy as xp

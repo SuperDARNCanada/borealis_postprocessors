@@ -7,7 +7,6 @@ SuperDARN data files.
 
 import argparse
 import os
-import pydarnio
 
 from data_processing.convert_antennas_iq import ProcessAntennasIQ2Bfiq
 from data_processing.convert_base import BaseConvert

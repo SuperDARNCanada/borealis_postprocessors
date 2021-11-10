@@ -13,8 +13,6 @@ import numpy as np
 import deepdish as dd
 import pydarnio
 
-# from exceptions import processing_exceptions
-
 try:
     import cupy as xp
 except ImportError:
