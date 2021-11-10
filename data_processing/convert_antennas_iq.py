@@ -9,10 +9,13 @@ import subprocess as sp
 import math
 import os
 from collections import OrderedDict
+from typing import Union
 
 import numpy as np
 import deepdish as dd
 from scipy.constants import speed_of_light
+
+from data_processing.convert_base import BaseConvert
 
 # from exceptions import processing_exceptions
 
@@ -30,7 +33,7 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-class ProcessAntennasIQ2Bfiq(object):
+class ProcessAntennasIQ2Bfiq(BaseConvert):
     """
     Class for conversion of Borealis antennas_iq files. This includes both restructuring of
     data files, and processing into higher-level data files.
@@ -47,88 +50,21 @@ class ProcessAntennasIQ2Bfiq(object):
         The filename of the input antennas_iq file.
     output_file: str
         The file name of output file
-    final_type: str
-        Desired type of output data file. Acceptable types are:
-        'antennas_iq'
-        'bfiq'
-        'rawacf'
     file_structure: str
         The write structure of the file. Structures include:
         'array'
         'site'
     final_structure: str
-        The desired structure of the output file. Same structures as
-        above, with the addition of 'dmap' for rawacf files.
-    averaging_method: str
-        Averaging method for computing correlations (for processing into rawacf files).
-        Acceptable values are 'mean' and 'median'.
+        The desired structure of the output file. Same structures as above.
     """
 
-    def __init__(self, filename: str, output_file: str, final_type: str,
-                 file_structure: str, final_structure: str, averaging_method: str = 'mean'):
-        self.filename = filename
-        self.output_file = output_file
-        self.file_type = 'antennas_iq'
-        self.final_type = final_type
-        self.file_structure = file_structure
-        self.final_structure = final_structure
-        self.averaging_method = averaging_method
-        self._temp_files = []
+    def __init__(self, filename: str, output_file: str, file_structure: str, final_structure: str):
+        super().__init__(filename, output_file, 'antennas_iq', 'bfiq', file_structure, final_structure)
 
-        # TODO: Figure out how to differentiate between restructuring and processing
-        self.process_to_bfiq(self.output_file)
-
-    def process_to_bfiq(self, outfile: str):
-        """
-        Converts an antennas_iq site file to bfiq site file
-
-        Parameters
-        ----------
-        outfile: str
-            Name of borealis bfiq hdf5 site file
-        """
-        def convert_to_numpy(data):
-            """Converts lists stored in dict into numpy array. Recursive.
-            Args:
-                data (Python dictionary): Dictionary with lists to convert to numpy arrays.
-            """
-            for k, v in data.items():
-                if isinstance(v, dict):
-                    convert_to_numpy(v)
-                elif isinstance(v, list):
-                    data[k] = np.array(v)
-                else:
-                    continue
-            return data
-
-        postprocessing_logger.info('Converting file {} to bfiq'.format(self.filename))
-
-        # Load file to read in records
-        bfiq_group = dd.io.load(self.filename)
-        records = bfiq_group.keys()
-
-        # Convert each record to bfiq record
-        for record in records:
-            record_dict = bfiq_group[record]
-            beamformed_record = self.beamform_record(record_dict)
-
-            # Convert to numpy arrays for saving to file with deepdish
-            formatted_record = convert_to_numpy(beamformed_record)
-
-            # Save record to temporary file
-            tempfile = '/tmp/{}.tmp'.format(record)
-            dd.io.save(tempfile, formatted_record, compression=None)
-
-            # Copy record to output file
-            cmd = 'h5copy -i {} -o {} -s {} -d {}'
-            cmd = cmd.format(tempfile, outfile, '/', '/{}'.format(record))
-            sp.call(cmd.split())
-
-            # Remove temporary file
-            os.remove(tempfile)
+        self.process_file()
 
     @staticmethod
-    def beamform_record(record: OrderedDict) -> OrderedDict:
+    def process_record(record: OrderedDict, averaging_method: Union[None, str]) -> OrderedDict:
         """
         Takes a record from an antennas_iq file and beamforms the data.
 
@@ -136,6 +72,8 @@ class ProcessAntennasIQ2Bfiq(object):
         ----------
         record: OrderedDict
             hdf5 record containing antennas_iq data and metadata
+        averaging_method: Union[None, str]
+            Method to use for averaging correlations across sequences. Unused by this method.
 
         Returns
         -------
@@ -148,7 +86,7 @@ class ProcessAntennasIQ2Bfiq(object):
         record['range_sep'] = ProcessAntennasIQ2Bfiq.calculate_range_separation(record)
         record['num_ranges'] = ProcessAntennasIQ2Bfiq.get_number_of_ranges(record)
         record['data'] = ProcessAntennasIQ2Bfiq.beamform_data(record)
-        record['data_descriptors'] = ProcessAntennasIQ2Bfiq.change_data_descriptors()
+        record['data_descriptors'] = ProcessAntennasIQ2Bfiq.get_data_descriptors()
         record['data_dimensions'] = ProcessAntennasIQ2Bfiq.get_data_dimensions(record)
         record['antenna_arrays_order'] = ProcessAntennasIQ2Bfiq.change_antenna_arrays_order()
 
@@ -452,7 +390,7 @@ class ProcessAntennasIQ2Bfiq(object):
         return num_ranges
 
     @staticmethod
-    def change_data_descriptors() -> list:
+    def get_data_descriptors() -> list:
         """
         Returns the proper data descriptors for a bfiq file
 

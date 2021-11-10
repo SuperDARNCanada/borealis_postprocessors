@@ -10,6 +10,7 @@ import os
 import pydarnio
 
 from data_processing.convert_antennas_iq import ProcessAntennasIQ2Bfiq
+from data_processing.convert_base import BaseConvert
 from data_processing.convert_bfiq import ProcessBfiq2Rawacf
 from exceptions import conversion_exceptions
 
@@ -129,26 +130,7 @@ class ConvertFile(object):
         self.save_intermediate_files = save_intermediate_files
         self._temp_files = []
 
-        self._file_names = self.temp_file_names()
-
-        if self.file_type == 'array':
-            self.restructure_file(self.filename, _, self.file_type, self.file_structure, 'site')
-
-        if self.file_type == 'antennas_iq' and self.final_type != 'antennas_iq':
-            self._antiq2bfiq_converter = ProcessAntennasIQ2Bfiq(self.file_names['antennas_iq.site'], self.file_names['bfiq.site'], 'bfiq',
-                                                                'site', 'site')
-        if self.file_type != 'rawacf' and self.final_type == 'rawacf':
-            self._bfiq2rawacf_convert = ProcessBfiq2Rawacf(self.filename, self.output_file, self.final_type,
-                                                           self.file_structure, self.final_structure,
-                                                           self.averaging_method)
-
-    def _remove_temp_files(self):
-        """
-        Deletes all temporary files used in the conversion chain.
-        """
-        if not self.save_intermediate_files:
-            for filename in self._temp_files:
-                os.remove(filename)
+        self._converter = self.get_converter()
 
     @staticmethod
     def check_args(filename, file_type, final_type, file_structure, final_structure):
@@ -205,57 +187,24 @@ class ConvertFile(object):
         of the ConvertFiles object.
         :return: Instantiated converter object
         """
-        # TODO: Add arguments to these once the classes are created
+        # Only restructuring necessary
+        if self.file_type == self.final_type:
+            return BaseConvert.restructure(self.filename, self.output_file, self.file_type, self.file_structure,
+                                           self.final_structure)
         if self.file_type == 'antennas_iq':
-            return ProcessAntennasIQ2Bfiq(self.filename, self.output_file, self.final_type,
-                                          self.file_structure, self.final_structure)
+            if self.final_type == 'bfiq':
+                return ProcessAntennasIQ2Bfiq(self.filename, self.output_file, self.file_structure,
+                                              self.final_structure)
+            else:
+                # TODO: Create this class
+                # return ProcessAntennasIQ2Rawacf(self.filename, self.output_file, self.file_structure,
+                #                                 self.final_structure, self.averaging_method)
+                return
         elif self.file_type == 'bfiq':
-            return ProcessBfiq2Rawacf(self.filename, self.output_file, self.final_type,
-                                      self.file_structure, self.final_structure, self.averaging_method)
+            return ProcessBfiq2Rawacf(self.filename, self.output_file, self.file_structure, self.final_structure,
+                                      self.averaging_method)
         else:
-            return ConvertRawacf()
-
-    def temp_file_names(self):
-        file_name_dict = {'antennas_iq.array': 'antennas_iq.hdf5',
-                          'antennas_iq.site': 'antennas_iq.hdf5.site',
-                          'bfiq.array': 'bfiq.hdf5',
-                          'bfiq.site': 'bfiq.hdf5.site',
-                          'rawacf.array': 'rawacf.hdf5',
-                          'rawacf.site': 'rawacf.hdf5.site',
-                          'rawacf.dmap': 'rawacf.dmap',
-                          f'{self.file_type}.{self.file_structure}': self.filename,
-                          f'{self.final_type}.{self.final_structure}': self.output_file}
-
-        return file_name_dict
-
-    @staticmethod
-    def restructure_file(filename: str, output_file: str, file_type: str, file_structure: str, final_structure: str):
-        """
-        Restructures a file, saving it as output_file.
-
-        :param filename:        Name of input file. String
-        :param output_file:     Name of output file. String
-        :param file_type:       Type of input file. String
-        :param file_structure:  Structure of input file. String
-        :param final_structure: Structure of output file. String
-        """
-
-        # Dmap is handled specially, since it has its own function in pydarnio
-        if final_structure == 'dmap':
-            pydarnio.BorealisConvert(filename, file_type, output_file, borealis_file_structure=file_structure)
-            return
-
-        # Get data from the file
-        reader = pydarnio.BorealisRead(filename, file_type, file_structure)
-
-        # Get data in correct format for writing to output file
-        if final_structure == 'site':
-            data = reader.records
-        else:
-            data = reader.arrays
-
-        # Write to output file
-        pydarnio.BorealisWrite(output_file, data, file_type, final_structure)
+            raise ValueError('Improper file type {}'.format(self.file_type))
 
 
 def main():

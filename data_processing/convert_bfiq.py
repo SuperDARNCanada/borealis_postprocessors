@@ -6,6 +6,9 @@ to rawacf files.
 """
 import logging
 from collections import OrderedDict
+from typing import Union
+
+from data_processing.convert_base import BaseConvert
 
 import numpy as np
 import os
@@ -23,7 +26,7 @@ else:
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-class ProcessBfiq2Rawacf(object):
+class ProcessBfiq2Rawacf(BaseConvert):
     """
     Class for conversion of Borealis bfiq files. This includes both restructuring of
     data files, and processing into rawacf data files.
@@ -39,11 +42,6 @@ class ProcessBfiq2Rawacf(object):
         The filename of the input antennas_iq file.
     output_file: str
         The file name of output file
-    final_type: str
-        Desired type of output data file. Acceptable types are:
-        'antennas_iq'
-        'bfiq'
-        'rawacf'
     file_structure: str
         The write structure of the file. Structures include:
         'array'
@@ -56,73 +54,15 @@ class ProcessBfiq2Rawacf(object):
         Acceptable values are 'mean' and 'median'.
     """
 
-    def __init__(self, filename: str, output_file: str, final_type: str,
-                 file_structure: str, final_structure: str, averaging_method: str = 'mean'):
-        self.filename = filename
-        self.output_file = output_file
-        self.file_type = 'bfiq'
-        self.final_type = final_type
-        self.file_structure = file_structure
-        self.final_structure = final_structure
+    def __init__(self, filename: str, output_file: str, file_structure: str, final_structure: str,
+                 averaging_method: str = 'mean'):
+        super().__init__(filename, output_file, 'bfiq', 'rawacf', file_structure, final_structure)
         self.averaging_method = averaging_method
-        self._temp_files = []
 
-        # TODO: Figure out how to differentiate between restructuring and processing
-        self.process_to_rawacf(self.output_file, self.averaging_method)
-
-    def process_to_rawacf(self, outfile: str, averaging_method: str):
-        """
-        Converts a bfiq site file to rawacf site file
-
-        Parameters
-        ----------
-        outfile: str
-            Borealis rawacf site file
-        averaging_method: str
-            Method to average over a sequence. Either 'mean' or 'median'
-        """
-
-        def convert_to_numpy(data):
-            """Converts lists stored in dict into numpy array. Recursive.
-            Args:
-                data (Python dictionary): Dictionary with lists to convert to numpy arrays.
-            """
-            for k, v in data.items():
-                if isinstance(v, dict):
-                    convert_to_numpy(v)
-                elif isinstance(v, list):
-                    data[k] = np.array(v)
-                else:
-                    continue
-            return data
-
-        postprocessing_logger.info('Converting file {} to bfiq'.format(self.filename))
-
-        # Load file to read in records
-        group = dd.io.load(self.filename)
-        records = group.keys()
-
-        # Convert each record to bfiq record
-        for record in records:
-            correlated_record = self.convert_record(group[record], averaging_method)
-
-            # Convert to numpy arrays for saving to file with deepdish
-            formatted_record = convert_to_numpy(correlated_record)
-
-            # Save record to temporary file
-            tempfile = '/tmp/{}.tmp'.format(record)
-            dd.io.save(tempfile, formatted_record, compression=None)
-
-            # Copy record to output file
-            cmd = 'h5copy -i {} -o {} -s {} -d {}'
-            cmd = cmd.format(tempfile, outfile, '/', '/{}'.format(record))
-            sp.call(cmd.split())
-
-            # Remove temporary file
-            os.remove(tempfile)
+        self.process_file()
 
     @staticmethod
-    def convert_record(record: OrderedDict, averaging_method: str) -> OrderedDict:
+    def process_record(record: OrderedDict, averaging_method: Union[None, str]) -> OrderedDict:
         """
         Takes a record from a bfiq file and processes it into record for rawacf file.
 
@@ -130,15 +70,16 @@ class ProcessBfiq2Rawacf(object):
         ----------
         record: OrderedDict
             hdf5 record containing bfiq data and metadata
-        averaging_method: str
-            Averaging method to use. Supported methods are 'mean' and 'median'
+        averaging_method: Union[None, str]
+            Averaging method to use. Supported methods are 'mean' and 'median'.
 
         Returns
         -------
         record: OrderedDict
             record converted to rawacf format
         """
-
+        if averaging_method is None:
+            averaging_method = 'mean'
         record['averaging_method'] = averaging_method
 
         correlations = ProcessBfiq2Rawacf.calculate_correlations(record, averaging_method)
