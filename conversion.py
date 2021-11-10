@@ -69,9 +69,6 @@ def conversion_parser():
     parser.add_argument("--averaging-method", required=False, default='mean',
                         help="Averaging method for generating rawacf type file. Allowed "
                              "methods are 'mean' (default) and 'median'.")
-    parser.add_argument("--save-intermediate-files", action='store_true',
-                        help='Save intermediate files generated in processing chain. E.g. if processing antennas_iq '
-                             '-> rawacf, save the bfiq file generated in between.')
 
     return parser
 
@@ -117,8 +114,7 @@ class ConvertFile(object):
     """
 
     def __init__(self, filename: str, output_file: str, file_type: str, final_type: str,
-                 file_structure: str, final_structure: str, averaging_method: str = 'mean',
-                 save_intermediate_files: bool = False):
+                 file_structure: str, final_structure: str, averaging_method: str = 'mean'):
         self.check_args(filename, file_type, final_type, file_structure, final_structure)
         self.filename = filename
         self.output_file = output_file
@@ -127,7 +123,6 @@ class ConvertFile(object):
         self.file_structure = file_structure
         self.final_structure = final_structure
         self.averaging_method = averaging_method
-        self.save_intermediate_files = save_intermediate_files
         self._temp_files = []
 
         self._converter = self.get_converter()
@@ -191,15 +186,14 @@ class ConvertFile(object):
         if self.file_type == self.final_type:
             return BaseConvert.restructure(self.filename, self.output_file, self.file_type, self.file_structure,
                                            self.final_structure)
+
         if self.file_type == 'antennas_iq':
             if self.final_type == 'bfiq':
                 return ProcessAntennasIQ2Bfiq(self.filename, self.output_file, self.file_structure,
                                               self.final_structure)
             else:
-                # TODO: Create this class
                 return ProcessAntennasIQ2Rawacf(self.filename, self.output_file, self.file_structure,
                                                 self.final_structure, self.averaging_method)
-                return
         elif self.file_type == 'bfiq':
             return ProcessBfiq2Rawacf(self.filename, self.output_file, self.file_structure, self.final_structure,
                                       self.averaging_method)
@@ -212,7 +206,7 @@ def main():
     args = parser.parse_args()
 
     ConvertFile(args.infile, args.outfile, args.filetype, args.final_type, args.file_structure, args.final_structure,
-                averaging_method=args.averaging_method, save_intermediate_files=args.save_intermediate_files)
+                averaging_method=args.averaging_method)
 
 
 if __name__ == "__main__":
