@@ -142,9 +142,9 @@ class ProcessBfiq2Rawacf(BaseConvert):
         bfiq_data = bfiq_data.reshape(record['data_dimensions'])
 
         num_lags = len(record['lags'])
-        main_corrs_unavg = np.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=np.complex64)
-        intf_corrs_unavg = np.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=np.complex64)
-        cross_corrs_unavg = np.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=np.complex64)
+        main_corrs_unavg = xp.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=xp.complex64)
+        intf_corrs_unavg = xp.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=xp.complex64)
+        cross_corrs_unavg = xp.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=xp.complex64)
 
         # Loop through every sequence and compute correlations.
         # Output shape after loop is [num_sequences, num_beams, num_range_gates, num_lags]
@@ -162,17 +162,17 @@ class ProcessBfiq2Rawacf(BaseConvert):
                                                                                             record)
 
         if averaging_method == 'median':
-            main_corrs = np.median(np.real(main_corrs_unavg), axis=0) + 1j * np.median(np.imag(main_corrs_unavg),
+            main_corrs = xp.median(xp.real(main_corrs_unavg), axis=0) + 1j * xp.median(xp.imag(main_corrs_unavg),
                                                                                        axis=0)
-            intf_corrs = np.median(np.real(intf_corrs_unavg), axis=0) + 1j * np.median(np.imag(intf_corrs_unavg),
+            intf_corrs = xp.median(xp.real(intf_corrs_unavg), axis=0) + 1j * xp.median(xp.imag(intf_corrs_unavg),
                                                                                        axis=0)
-            cross_corrs = np.median(np.real(cross_corrs_unavg), axis=0) + 1j * np.median(np.imag(cross_corrs_unavg),
+            cross_corrs = xp.median(xp.real(cross_corrs_unavg), axis=0) + 1j * xp.median(xp.imag(cross_corrs_unavg),
                                                                                          axis=0)
         else:
             # Using mean averaging
-            main_corrs = np.einsum('ijkl->jkl', main_corrs_unavg) / num_sequences
-            intf_corrs = np.einsum('ijkl->jkl', intf_corrs_unavg) / num_sequences
-            cross_corrs = np.einsum('ijkl->jkl', cross_corrs_unavg) / num_sequences
+            main_corrs = xp.einsum('ijkl->jkl', main_corrs_unavg) / num_sequences
+            intf_corrs = xp.einsum('ijkl->jkl', intf_corrs_unavg) / num_sequences
+            cross_corrs = xp.einsum('ijkl->jkl', cross_corrs_unavg) / num_sequences
 
         main_acfs = main_corrs.flatten()
         intf_acfs = intf_corrs.flatten()
@@ -213,34 +213,34 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
         values = []
         if record['lags'].size == 0:
-            values.append(np.array([]))
+            values.append(xp.array([]))
             return values
 
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
-        sample_off = np.int32(sample_off)
+        sample_off = xp.int32(sample_off)
 
         # Helpful values converted to units of samples
-        range_off = np.arange(record['num_ranges'], dtype=np.int32) + sample_off
+        range_off = xp.arange(record['num_ranges'], dtype=xp.int32) + sample_off
         tau_in_samples = record['tau_spacing'] * 1e-6 * record['rx_sample_rate']
-        lag_pulses_as_samples = np.array(record['lags'], np.int32) * np.int32(tau_in_samples)
+        lag_pulses_as_samples = xp.array(record['lags'], xp.int32) * xp.int32(tau_in_samples)
 
         # [num_range_gates, 1, 1]
         # [1, num_lags, 2]
-        samples_for_all_range_lags = (range_off[..., np.newaxis, np.newaxis] +
-                                      lag_pulses_as_samples[np.newaxis, :, :])
+        samples_for_all_range_lags = (range_off[..., xp.newaxis, xp.newaxis] +
+                                      lag_pulses_as_samples[xp.newaxis, :, :])
 
         # [num_range_gates, num_lags, 2]
-        row = samples_for_all_range_lags[..., 1].astype(np.int32)
+        row = samples_for_all_range_lags[..., 1].astype(xp.int32)
 
         # [num_range_gates, num_lags, 2]
-        column = samples_for_all_range_lags[..., 0].astype(np.int32)
+        column = samples_for_all_range_lags[..., 0].astype(xp.int32)
 
         # [num_beams, num_range_gates, num_lags]
         values = correlated[:, row, column]
 
         # Find the sample that corresponds to the second pulse transmitting
-        second_pulse_sample_num = np.int32(tau_in_samples) * record['pulses'][1] - sample_off - 1
+        second_pulse_sample_num = xp.int32(tau_in_samples) * record['pulses'][1] - sample_off - 1
 
         # Replace all ranges which are contaminated by the second pulse for lag 0
         # with the data from those ranges after the final pulse.
@@ -269,7 +269,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
         -------
         Array of ints characterizing the data dimensions
         """
-        return np.array([len(record['beam_azms']), record['num_ranges'], len(record['lags'])], dtype=np.uint32)
+        return xp.array([len(record['beam_azms']), record['num_ranges'], len(record['lags'])], dtype=xp.uint32)
 
     @staticmethod
     def remove_extra_fields(record: OrderedDict) -> OrderedDict:

@@ -129,8 +129,8 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         num_antennas, num_sequences, num_samps = record['data_dimensions']
         antennas_data = antennas_data.reshape(record['data_dimensions'])
 
-        main_beamformed_data = np.array([], dtype=np.complex64)
-        intf_beamformed_data = np.array([], dtype=np.complex64)
+        main_beamformed_data = xp.array([], dtype=xp.complex64)
+        intf_beamformed_data = xp.array([], dtype=xp.complex64)
         main_antenna_count = record['main_antenna_count']
 
         # TODO: Grab these values from somewhere
@@ -142,18 +142,18 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         for sequence in range(num_sequences):
             # data input shape  = [num_antennas, num_samps]
             # data return shape = [num_beams, num_samps]
-            main_beamformed_data = np.append(main_beamformed_data,
+            main_beamformed_data = xp.append(main_beamformed_data,
                                              ProcessAntennasIQ2Bfiq.beamform(antennas_data[:main_antenna_count, sequence, :],
                                                                              beam_azms,
                                                                              freq,
                                                                              main_antenna_spacing))
-            intf_beamformed_data = np.append(intf_beamformed_data,
+            intf_beamformed_data = xp.append(intf_beamformed_data,
                                              ProcessAntennasIQ2Bfiq.beamform(antennas_data[main_antenna_count:, sequence, :],
                                                                              beam_azms,
                                                                              freq,
                                                                              intf_antenna_spacing))
 
-        all_data = np.append(main_beamformed_data, intf_beamformed_data).flatten()
+        all_data = xp.append(main_beamformed_data, intf_beamformed_data).flatten()
 
         return all_data
 
@@ -196,18 +196,18 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
                                                                  num_antennas,
                                                                  antenna_spacing)
                 # Bring into range (-2*pi, 2*pi)
-                phase_shift = np.fmod(phase_shift, 2 * np.pi)
+                phase_shift = xp.fmod(phase_shift, 2 * xp.pi)
                 antenna_phase_shifts.append(phase_shift)
 
             # Apply phase shift to data from respective antenna
             phased_antenna_data = [ProcessAntennasIQ2Bfiq.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
                                    for i in range(num_antennas)]
-            phased_antenna_data = np.array(phased_antenna_data)
+            phased_antenna_data = xp.array(phased_antenna_data)
 
             # Sum across antennas to get beamformed data
-            one_beam_data = np.sum(phased_antenna_data, axis=0)
+            one_beam_data = xp.sum(phased_antenna_data, axis=0)
             beamformed_data.append(one_beam_data)
-        beamformed_data = np.array(beamformed_data)
+        beamformed_data = xp.array(beamformed_data)
 
         return beamformed_data
 
@@ -247,15 +247,15 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         freq = freq * 1000.0  # convert to Hz.
 
         # Convert to radians
-        beamrad = np.pi * np.float64(beamdir) / 180.0
+        beamrad = xp.pi * xp.float64(beamdir) / 180.0
 
         # Pointing to right of boresight, use point in middle (hypothetically antenna 7.5) as phshift=0
-        phshift = 2 * np.pi * freq * \
+        phshift = 2 * xp.pi * freq * \
                   (((num_antennas - 1) / 2.0 - antenna) * antenna_spacing + centre_offset) * \
-                  np.cos(np.pi / 2.0 - beamrad) / speed_of_light
+                  xp.cos(xp.pi / 2.0 - beamrad) / speed_of_light
 
         # Bring into range (-2*pi, 2*pi)
-        phshift = np.fmod(phshift, 2 * np.pi)
+        phshift = xp.fmod(phshift, 2 * xp.pi)
 
         return phshift
 
@@ -280,7 +280,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         samples: np.array
             Basic_samples that have been shaped for the antenna for the desired beam.
         """
-        samples = amplitude * np.exp(1j * phshift) * basic_samples
+        samples = amplitude * xp.exp(1j * phshift) * basic_samples
 
         return samples
 
@@ -302,7 +302,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         # TODO: Get this from somewhere
         first_range = 180.0  # scf.FIRST_RANGE
 
-        return np.float32(first_range)
+        return xp.float32(first_range)
 
     @staticmethod
     def calculate_first_range_rtt(record: OrderedDict) -> OrderedDict:
@@ -322,7 +322,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         # km * (there and back) * (km to meters) * (seconds to us) / c
         first_range_rtt = record['first_range'] * 2.0 * 1.0e3 * 1e6 / speed_of_light
 
-        return np.float32(first_range_rtt)
+        return xp.float32(first_range_rtt)
 
     @staticmethod
     def create_lag_table(record: OrderedDict) -> np.array:
@@ -347,7 +347,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         lag_table.append([record['pulses'][0], record['pulses'][0]])    # lag 0
         lag_table = sorted(lag_table, key=lambda x: x[1] - x[0])        # sort by lag number
         lag_table.append([record['pulses'][-1], record['pulses'][-1]])  # alternate lag 0
-        lags = np.array(lag_table, dtype=np.uint32)
+        lags = xp.array(lag_table, dtype=xp.uint32)
 
         return lags
 
@@ -369,7 +369,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         # (1 / (sample rate)) * c / (km to meters) / 2
         range_sep = 1 / record['rx_sample_rate'] * speed_of_light / 1.0e3 / 2.0
 
-        return np.float32(range_sep)
+        return xp.float32(range_sep)
 
     @staticmethod
     def get_number_of_ranges(record: OrderedDict) -> int:
@@ -391,10 +391,10 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         station = record['station']
         if station in ["cly", "rkn", "inv"]:
             num_ranges = 100  # scf.POLARDARN_NUM_RANGES
-            num_ranges = np.uint32(num_ranges)
+            num_ranges = xp.uint32(num_ranges)
         elif station in ["sas", "pgr"]:
             num_ranges = 75  # scf.STD_NUM_RANGES
-            num_ranges = np.uint32(num_ranges)
+            num_ranges = xp.uint32(num_ranges)
 
         return num_ranges
 
@@ -431,8 +431,8 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         # New dimensions: [num_antenna_arrays, num_sequences, num_beams, num_samps]
         old_dimensions = record['data_dimensions']
 
-        new_dimensions = np.array([2, old_dimensions[1], len(record['beam_azms']), old_dimensions[2]],
-                                  dtype=np.uint32)
+        new_dimensions = xp.array([2, old_dimensions[1], len(record['beam_azms']), old_dimensions[2]],
+                                  dtype=xp.uint32)
 
         return new_dimensions
 
