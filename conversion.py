@@ -8,9 +8,9 @@ SuperDARN data files.
 import argparse
 import os
 
-from data_processing.convert_antennas_iq import ProcessAntennasIQ2Bfiq
+from data_processing.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
 from data_processing.convert_base import BaseConvert
-from data_processing.convert_bfiq import ProcessBfiq2Rawacf
+from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
 from exceptions import conversion_exceptions
 
 # Keys are valid input file types, values are lists of allowed
