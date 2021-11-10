@@ -14,14 +14,15 @@ from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
 
 class ProcessAntennasIQ2Rawacf(BaseConvert):
     """
-    Class for conversion of Borealis antennas_iq files. This includes both restructuring of
-    data files, and processing into higher-level data files.
+    Class for conversion of Borealis antennas_iq files into rawacf files. This class inherits from
+    BaseConvert, which handles all functionality generic to postprocessing borealis files.
 
     See Also
     --------
     ConvertFile
-    ConvertBfiq
-    ConvertRawacf
+    BaseConvert
+    ProcessAntennasIQ2Bfiq
+    ProcessBfiq2Rawacf
 
     Attributes
     ----------
@@ -34,11 +35,27 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
         'array'
         'site'
     final_structure: str
-        The desired structure of the output file. Same structures as above.
+        The desired structure of the output file. Same structures as above, plus 'dmap'.
     """
 
     def __init__(self, filename: str, output_file: str, file_structure: str, final_structure: str,
                  averaging_method: str = 'mean'):
+        """
+        Initialize the attributes of the class.
+
+        Parameters
+        ----------
+        filename: str
+            Path to input file.
+        output_file: str
+            Path to output file.
+        file_structure: str
+            Borealis structure of input file. Either 'array' or 'site'.
+        final_structure: str
+            Borealis structure of output file. Either 'array', 'site', or 'dmap'.
+        averaging_method: str
+            Method for averaging correlations across sequences. Either 'median' or 'mean'.
+        """
         super().__init__(filename, output_file, 'antennas_iq', 'rawacf', file_structure, final_structure)
         self.averaging_method = averaging_method
 
@@ -47,7 +64,7 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
     @staticmethod
     def process_record(record: OrderedDict, averaging_method: Union[None, str]) -> OrderedDict:
         """
-        Takes a record from an antennas_iq file and beamforms the data.
+        Takes a record from an antennas_iq file process into a rawacf record.
 
         Parameters
         ----------
@@ -59,7 +76,7 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
         Returns
         -------
         record: OrderedDict
-            hdf5 record, with new fields required by bfiq data format
+            hdf5 record, with new fields required by rawacf data format
         """
         record = ProcessAntennasIQ2Bfiq.process_record(record, averaging_method)
         record = ProcessBfiq2Rawacf.process_record(record, averaging_method)

@@ -25,13 +25,15 @@ postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 class ProcessBfiq2Rawacf(BaseConvert):
     """
-    Class for conversion of Borealis bfiq files. This includes both restructuring of
-    data files, and processing into rawacf data files.
+    Class for conversion of Borealis bfiq files into rawacf files. This class inherits from
+    BaseConvert, which handles all functionality generic to postprocessing borealis files.
 
     See Also
     --------
     ConvertFile
-    ConvertRawacf
+    BaseConvert
+    ProcessAntennasIQ2Bfiq
+    ProcessAntennasIQ2Rawacf
 
     Attributes
     ----------
@@ -53,6 +55,22 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
     def __init__(self, filename: str, output_file: str, file_structure: str, final_structure: str,
                  averaging_method: str = 'mean'):
+        """
+        Initialize the attributes of the class.
+
+        Parameters
+        ----------
+        filename: str
+            Path to input file.
+        output_file: str
+            Path to output file.
+        file_structure: str
+            Borealis structure of input file. Either 'array' or 'site'.
+        final_structure: str
+            Borealis structure of output file. Either 'array', 'site', or 'dmap'.
+        averaging_method: str
+            Method for averaging correlations across sequences. Either 'median' or 'mean'.
+        """
         super().__init__(filename, output_file, 'bfiq', 'rawacf', file_structure, final_structure)
         self.averaging_method = averaging_method
 

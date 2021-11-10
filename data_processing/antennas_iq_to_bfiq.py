@@ -30,14 +30,14 @@ postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 class ProcessAntennasIQ2Bfiq(BaseConvert):
     """
-    Class for conversion of Borealis antennas_iq files. This includes both restructuring of
-    data files, and processing into higher-level data files.
+    Class for conversion of Borealis antennas_iq files into bfiq files. This class inherits from
+    BaseConvert, which handles all functionality generic to postprocessing borealis files.
 
     See Also
     --------
     ConvertFile
-    ConvertBfiq
-    ConvertRawacf
+    BaseConvert
+    ProcessAntennasIQ2Rawacf
 
     Attributes
     ----------
@@ -54,6 +54,20 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
     """
 
     def __init__(self, filename: str, output_file: str, file_structure: str, final_structure: str):
+        """
+        Initialize the attributes of the class.
+
+        Parameters
+        ----------
+        filename: str
+            Path to input file.
+        output_file: str
+            Path to output file.
+        file_structure: str
+            Borealis structure of input file. Either 'array' or 'site'.
+        final_structure: str
+            Borealis structure of output file. Either 'array', 'site', or 'dmap'.
+        """
         super().__init__(filename, output_file, 'antennas_iq', 'bfiq', file_structure, final_structure)
 
         self.process_file()
@@ -61,7 +75,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
     @staticmethod
     def process_record(record: OrderedDict, averaging_method: Union[None, str]) -> OrderedDict:
         """
-        Takes a record from an antennas_iq file and beamforms the data.
+        Takes a record from an antennas_iq file and converts it into a bfiq record.
 
         Parameters
         ----------

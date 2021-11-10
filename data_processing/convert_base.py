@@ -65,6 +65,30 @@ class BaseConvert(object):
     """
     def __init__(self, filename: str, output_file: str, file_type: str, final_type: str, file_structure: str,
                  final_structure: str):
+        """
+        Initializes the attributes of the class.
+
+        Parameters
+        ----------
+        filename: str
+            Path to the input file
+        output_file: str
+            Path to the output file
+        file_type: str
+            Borealis file type of input file. Supported types are:
+            'antennas_iq'
+            'bfiq'
+            'rawacf'
+        final_type: str
+            Borealis file type of output file. Supported types are same as for file_type.
+        file_structure: str
+            Borealis file structure of input file. Supported structures are:
+            'array'
+            'site'
+        final_structure: str
+            Borealis file structure of output file. Supported structures are same as file_structure,
+            with the addition of 'dmap' for rawacf-type files.
+        """
         self.filename = filename
         self.output_file = output_file
         self.file_type = file_type
@@ -77,7 +101,17 @@ class BaseConvert(object):
     def process_file(self):
         """
         Applies appropriate downstream processing to convert between file types (for site-structured
-        files only).
+        files only). The processing chain is as follows:
+        1. Restructure to site format
+        2. Apply appropriate downstream processing
+        3. Restructure to final format
+        4. Remove all intermediate files created along the way
+
+        See Also
+        --------
+        ProcessAntennasIQ2Bfiq
+        ProcessAntennasIQ2Rawacf
+        ProcessBfiq2Rawacf
         """
         # Restructure to 'site' format if necessary
         if self.file_structure != 'site':
@@ -98,7 +132,7 @@ class BaseConvert(object):
 
         postprocessing_logger.info('Converting file {} --> {}'.format(file_to_process, processed_file))
         
-        # Load file to read in records
+        # Load file
         group = dd.io.load(file_to_process)
         records = group.keys()
 
@@ -131,7 +165,7 @@ class BaseConvert(object):
 
     def _remove_temp_files(self):
         """
-        Deletes all temporary files used in the conversion chain.
+        Deletes all temporary files used in the processing chain.
         """
         for filename in self._temp_files:
             os.remove(filename)
