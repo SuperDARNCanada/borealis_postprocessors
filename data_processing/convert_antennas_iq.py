@@ -30,7 +30,7 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-class ConvertAntennasIQ(object):
+class ProcessAntennasIQ2Bfiq(object):
     """
     Class for conversion of Borealis antennas_iq files. This includes both restructuring of
     data files, and processing into higher-level data files.
@@ -142,15 +142,15 @@ class ConvertAntennasIQ(object):
         record: OrderedDict
             hdf5 record, with new fields required by bfiq data format
         """
-        record['first_range'] = ConvertAntennasIQ.calculate_first_range(record)
-        record['first_range_rtt'] = ConvertAntennasIQ.calculate_first_range_rtt(record)
-        record['lags'] = ConvertAntennasIQ.create_lag_table(record)
-        record['range_sep'] = ConvertAntennasIQ.calculate_range_separation(record)
-        record['num_ranges'] = ConvertAntennasIQ.get_number_of_ranges(record)
-        record['data'] = ConvertAntennasIQ.beamform_data(record)
-        record['data_descriptors'] = ConvertAntennasIQ.change_data_descriptors()
-        record['data_dimensions'] = ConvertAntennasIQ.get_data_dimensions(record)
-        record['antenna_arrays_order'] = ConvertAntennasIQ.change_antenna_arrays_order()
+        record['first_range'] = ProcessAntennasIQ2Bfiq.calculate_first_range(record)
+        record['first_range_rtt'] = ProcessAntennasIQ2Bfiq.calculate_first_range_rtt(record)
+        record['lags'] = ProcessAntennasIQ2Bfiq.create_lag_table(record)
+        record['range_sep'] = ProcessAntennasIQ2Bfiq.calculate_range_separation(record)
+        record['num_ranges'] = ProcessAntennasIQ2Bfiq.get_number_of_ranges(record)
+        record['data'] = ProcessAntennasIQ2Bfiq.beamform_data(record)
+        record['data_descriptors'] = ProcessAntennasIQ2Bfiq.change_data_descriptors()
+        record['data_dimensions'] = ProcessAntennasIQ2Bfiq.get_data_dimensions(record)
+        record['antenna_arrays_order'] = ProcessAntennasIQ2Bfiq.change_antenna_arrays_order()
 
         return record
 
@@ -196,15 +196,15 @@ class ConvertAntennasIQ(object):
             # data input shape  = [num_antennas, num_samps]
             # data return shape = [num_beams, num_samps]
             main_beamformed_data = np.append(main_beamformed_data,
-                                             ConvertAntennasIQ.beamform(antennas_data[:main_antenna_count, sequence, :],
-                                                                        beam_azms,
-                                                                        freq,
-                                                                        main_antenna_spacing))
+                                             ProcessAntennasIQ2Bfiq.beamform(antennas_data[:main_antenna_count, sequence, :],
+                                                                             beam_azms,
+                                                                             freq,
+                                                                             main_antenna_spacing))
             intf_beamformed_data = np.append(intf_beamformed_data,
-                                             ConvertAntennasIQ.beamform(antennas_data[main_antenna_count:, sequence, :],
-                                                                        beam_azms,
-                                                                        freq,
-                                                                        intf_antenna_spacing))
+                                             ProcessAntennasIQ2Bfiq.beamform(antennas_data[main_antenna_count:, sequence, :],
+                                                                             beam_azms,
+                                                                             freq,
+                                                                             intf_antenna_spacing))
 
         all_data = np.append(main_beamformed_data, intf_beamformed_data).flatten()
 
@@ -243,17 +243,17 @@ class ConvertAntennasIQ(object):
 
             # Get phase shift for each antenna
             for antenna in range(num_antennas):
-                phase_shift = ConvertAntennasIQ.get_phshift(beam_direction,
-                                                            rxfreq,
-                                                            antenna,
-                                                            num_antennas,
-                                                            antenna_spacing)
+                phase_shift = ProcessAntennasIQ2Bfiq.get_phshift(beam_direction,
+                                                                 rxfreq,
+                                                                 antenna,
+                                                                 num_antennas,
+                                                                 antenna_spacing)
                 # Bring into range (-2*pi, 2*pi)
                 phase_shift = math.fmod(phase_shift, 2 * math.pi)
                 antenna_phase_shifts.append(phase_shift)
 
             # Apply phase shift to data from respective antenna
-            phased_antenna_data = [ConvertAntennasIQ.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
+            phased_antenna_data = [ProcessAntennasIQ2Bfiq.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
                                    for i in range(num_antennas)]
             phased_antenna_data = np.array(phased_antenna_data)
 

@@ -9,8 +9,8 @@ import argparse
 import os
 import pydarnio
 
-from data_processing.convert_antennas_iq import ConvertAntennasIQ
-from data_processing.convert_bfiq import ConvertBfiq
+from data_processing.convert_antennas_iq import ProcessAntennasIQ2Bfiq
+from data_processing.convert_bfiq import ProcessBfiq2Rawacf
 from exceptions import conversion_exceptions
 
 # Keys are valid input file types, values are lists of allowed
@@ -129,7 +129,18 @@ class ConvertFile(object):
         self.save_intermediate_files = save_intermediate_files
         self._temp_files = []
 
-        self._converter = self.get_converter()
+        self._file_names = self.temp_file_names()
+
+        if self.file_type == 'array':
+            self.restructure_file(self.filename, _, self.file_type, self.file_structure, 'site')
+
+        if self.file_type == 'antennas_iq' and self.final_type != 'antennas_iq':
+            self._antiq2bfiq_converter = ProcessAntennasIQ2Bfiq(self.file_names['antennas_iq.site'], self.file_names['bfiq.site'], 'bfiq',
+                                                                'site', 'site')
+        if self.file_type != 'rawacf' and self.final_type == 'rawacf':
+            self._bfiq2rawacf_convert = ProcessBfiq2Rawacf(self.filename, self.output_file, self.final_type,
+                                                           self.file_structure, self.final_structure,
+                                                           self.averaging_method)
 
     def _remove_temp_files(self):
         """
@@ -186,6 +197,7 @@ class ConvertFile(object):
             raise conversion_exceptions.NoConversionNecessaryError(
                 'Desired output format is same as input format.'
             )
+        # TODO: Catch case where dmap file is input (can't convert dmap to hdf5)
 
     def get_converter(self):
         """
@@ -195,42 +207,55 @@ class ConvertFile(object):
         """
         # TODO: Add arguments to these once the classes are created
         if self.file_type == 'antennas_iq':
-            return ConvertAntennasIQ(self.filename, self.output_file, self.final_type,
-                                     self.file_structure, self.final_structure)
+            return ProcessAntennasIQ2Bfiq(self.filename, self.output_file, self.final_type,
+                                          self.file_structure, self.final_structure)
         elif self.file_type == 'bfiq':
-            return ConvertBfiq(self.filename, self.output_file, self.final_type,
-                               self.file_structure, self.final_structure, self.averaging_method)
+            return ProcessBfiq2Rawacf(self.filename, self.output_file, self.final_type,
+                                      self.file_structure, self.final_structure, self.averaging_method)
         else:
             return ConvertRawacf()
 
+    def temp_file_names(self):
+        file_name_dict = {'antennas_iq.array': 'antennas_iq.hdf5',
+                          'antennas_iq.site': 'antennas_iq.hdf5.site',
+                          'bfiq.array': 'bfiq.hdf5',
+                          'bfiq.site': 'bfiq.hdf5.site',
+                          'rawacf.array': 'rawacf.hdf5',
+                          'rawacf.site': 'rawacf.hdf5.site',
+                          'rawacf.dmap': 'rawacf.dmap',
+                          f'{self.file_type}.{self.file_structure}': self.filename,
+                          f'{self.final_type}.{self.final_structure}': self.output_file}
 
-def restructure_file(self, filename: str, output_file: str, file_type: str, file_structure: str, final_structure: str):
-    """
-    Restructures a file, saving it as output_file.
+        return file_name_dict
 
-    :param filename:        Name of input file. String
-    :param output_file:     Name of output file. String
-    :param file_type:       Type of input file. String
-    :param file_structure:  Structure of input file. String
-    :param final_structure: Structure of output file. String
-    """
+    @staticmethod
+    def restructure_file(filename: str, output_file: str, file_type: str, file_structure: str, final_structure: str):
+        """
+        Restructures a file, saving it as output_file.
 
-    # Dmap is handled specially, since it has its own function in pydarnio
-    if final_structure == 'dmap':
-        pydarnio.BorealisConvert(filename, file_type, output_file, borealis_file_structure=file_structure)
-        return
+        :param filename:        Name of input file. String
+        :param output_file:     Name of output file. String
+        :param file_type:       Type of input file. String
+        :param file_structure:  Structure of input file. String
+        :param final_structure: Structure of output file. String
+        """
 
-    # Get data from the file
-    reader = pydarnio.BorealisRead(filename, file_type, file_structure)
+        # Dmap is handled specially, since it has its own function in pydarnio
+        if final_structure == 'dmap':
+            pydarnio.BorealisConvert(filename, file_type, output_file, borealis_file_structure=file_structure)
+            return
 
-    # Get data in correct format for writing to output file
-    if final_structure == 'site':
-        data = reader.records
-    else:
-        data = reader.arrays
+        # Get data from the file
+        reader = pydarnio.BorealisRead(filename, file_type, file_structure)
 
-    # Write to output file
-    pydarnio.BorealisWrite(output_file, data, file_type, final_structure)
+        # Get data in correct format for writing to output file
+        if final_structure == 'site':
+            data = reader.records
+        else:
+            data = reader.arrays
+
+        # Write to output file
+        pydarnio.BorealisWrite(output_file, data, file_type, final_structure)
 
 
 def main():

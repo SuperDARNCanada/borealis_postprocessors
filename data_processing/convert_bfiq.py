@@ -23,7 +23,7 @@ else:
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-class ConvertBfiq(object):
+class ProcessBfiq2Rawacf(object):
     """
     Class for conversion of Borealis bfiq files. This includes both restructuring of
     data files, and processing into rawacf data files.
@@ -141,14 +141,14 @@ class ConvertBfiq(object):
 
         record['averaging_method'] = averaging_method
 
-        correlations = ConvertBfiq.calculate_correlations(record, averaging_method)
+        correlations = ProcessBfiq2Rawacf.calculate_correlations(record, averaging_method)
         record['main_acfs'] = correlations[0]
         record['intf_acfs'] = correlations[1]
         record['xcfs'] = correlations[2]
 
-        record['correlation_descriptors'] = ConvertBfiq.get_correlation_descriptors()
-        record['correlation_dimensions'] = ConvertBfiq.get_correlation_dimensions(record)
-        record = ConvertBfiq.remove_extra_fields(record)
+        record['correlation_descriptors'] = ProcessBfiq2Rawacf.get_correlation_descriptors()
+        record['correlation_dimensions'] = ProcessBfiq2Rawacf.get_correlation_dimensions(record)
+        record = ProcessBfiq2Rawacf.remove_extra_fields(record)
 
         return record
 
@@ -195,15 +195,15 @@ class ConvertBfiq(object):
         for sequence in range(num_sequences):
             # data input shape  = [num_antenna_arrays, num_beams, num_samps]
             # data return shape = [num_beams, num_range_gates, num_lags]
-            main_corrs_unavg[sequence, ...] = ConvertBfiq.correlations_from_samples(bfiq_data[0, sequence, :, :],
+            main_corrs_unavg[sequence, ...] = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, sequence, :, :],
                                                                                     bfiq_data[0, sequence, :, :],
-                                                                                    record)
-            intf_corrs_unavg[sequence, ...] = ConvertBfiq.correlations_from_samples(bfiq_data[1, sequence, :, :],
+                                                                                           record)
+            intf_corrs_unavg[sequence, ...] = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, sequence, :, :],
                                                                                     bfiq_data[1, sequence, :, :],
-                                                                                    record)
-            cross_corrs_unavg[sequence, ...] = ConvertBfiq.correlations_from_samples(bfiq_data[0, sequence, :, :],
+                                                                                           record)
+            cross_corrs_unavg[sequence, ...] = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, sequence, :, :],
                                                                                      bfiq_data[1, sequence, :, :],
-                                                                                     record)
+                                                                                            record)
 
         if averaging_method == 'median':
             main_corrs = np.median(np.real(main_corrs_unavg), axis=0) + 1j * np.median(np.imag(main_corrs_unavg),
