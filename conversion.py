@@ -9,6 +9,7 @@ import argparse
 import os
 
 from data_processing.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
+from data_processing.antennas_iq_to_rawacf import ProcessAntennasIQ2Rawacf
 from data_processing.convert_base import BaseConvert
 from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
 from exceptions import conversion_exceptions
@@ -196,8 +197,8 @@ class ConvertFile(object):
                                               self.final_structure)
             else:
                 # TODO: Create this class
-                # return ProcessAntennasIQ2Rawacf(self.filename, self.output_file, self.file_structure,
-                #                                 self.final_structure, self.averaging_method)
+                return ProcessAntennasIQ2Rawacf(self.filename, self.output_file, self.file_structure,
+                                                self.final_structure, self.averaging_method)
                 return
         elif self.file_type == 'bfiq':
             return ProcessBfiq2Rawacf(self.filename, self.output_file, self.file_structure, self.final_structure,
