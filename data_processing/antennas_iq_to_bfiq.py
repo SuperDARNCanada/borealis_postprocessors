@@ -307,7 +307,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         return xp.float32(first_range)
 
     @staticmethod
-    def calculate_first_range_rtt(record: OrderedDict) -> OrderedDict:
+    def calculate_first_range_rtt(record: OrderedDict) -> float:
         """
         Calculates the round-trip time (in microseconds) to the first range in a record.
 
@@ -388,15 +388,12 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         num_ranges: int
             The number of ranges of the data
         """
-        # TODO: Do this intelligently. Maybe grab from githash and cpid? Have default values too
-        #   Could get this from the number of samples in a file?
-        station = record['station']
-        if station in ["cly", "rkn", "inv"]:
-            num_ranges = 100  # scf.POLARDARN_NUM_RANGES
-            num_ranges = xp.uint32(num_ranges)
-        elif station in ["sas", "pgr"]:
-            num_ranges = 75  # scf.STD_NUM_RANGES
-            num_ranges = xp.uint32(num_ranges)
+        # Infer the number of ranges from the record metadata
+        first_range_offset = ProcessAntennasIQ2Bfiq.calculate_first_range_rtt(record) * 1e-6 * record['rx_sample_rate']
+        num_ranges = record['num_samps'] - xp.int32(first_range_offset) - record['blanked_samples'][-1]
+
+        # 3 extra samples taken for each record (not sure why)
+        num_ranges = num_ranges - 3
 
         return num_ranges
 
