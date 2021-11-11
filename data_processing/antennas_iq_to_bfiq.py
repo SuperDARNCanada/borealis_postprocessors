@@ -133,10 +133,9 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         intf_beamformed_data = xp.array([], dtype=xp.complex64)
         main_antenna_count = record['main_antenna_count']
 
-        # TODO: Grab these values from borealis_config_files for the radar.
-        #   Or, hardcode them here and lookup based on station id
-        main_antenna_spacing = 15.24
-        intf_antenna_spacing = 15.24
+        station_id = record['station_id']
+        main_antenna_spacing = radar_dict[station_id]['main_antenna_spacing']
+        intf_antenna_spacing = radar_dict[station_id]['intf_antenna_spacing']
 
         # Loop through every sequence and beamform the data.
         # Output shape after loop is [num_sequences, num_beams, num_samps]
@@ -446,3 +445,17 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         List of array names
         """
         return ['main', 'intf']
+
+
+radar_dict = {
+    'sas': {'main_antenna_spacing': 15.24,
+            'intf_antenna_spacing': 15.24},
+    'pgr': {'main_antenna_spacing': 15.24,
+            'intf_antenna_spacing': 15.24},
+    'cly': {'main_antenna_spacing': 15.24,
+            'intf_antenna_spacing': 15.24},
+    'rkn': {'main_antenna_spacing': 15.24,
+            'intf_antenna_spacing': 15.24},
+    'inv': {'main_antenna_spacing': 15.24,
+            'intf_antenna_spacing': 15.24}
+}
