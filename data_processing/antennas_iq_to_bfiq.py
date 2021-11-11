@@ -133,7 +133,8 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         intf_beamformed_data = xp.array([], dtype=xp.complex64)
         main_antenna_count = record['main_antenna_count']
 
-        # TODO: Grab these values from somewhere
+        # TODO: Grab these values from borealis_config_files for the radar.
+        #   Or, hardcode them here and lookup based on station id
         main_antenna_spacing = 15.24
         intf_antenna_spacing = 15.24
 
@@ -299,7 +300,8 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         first_range: float
             Distance to first range in km
         """
-        # TODO: Get this from somewhere
+        # TODO: Get this from somewhere, probably linked to the experiment ran. Might need to look up
+        #   based on githash
         first_range = 180.0  # scf.FIRST_RANGE
 
         return xp.float32(first_range)
