@@ -143,16 +143,18 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         for sequence in range(num_sequences):
             # data input shape  = [num_antennas, num_samps]
             # data return shape = [num_beams, num_samps]
-            main_beamformed_data = xp.append(main_beamformed_data,
-                                             ProcessAntennasIQ2Bfiq.beamform(antennas_data[:main_antenna_count, sequence, :],
-                                                                             beam_azms,
-                                                                             freq,
-                                                                             main_antenna_spacing))
-            intf_beamformed_data = xp.append(intf_beamformed_data,
-                                             ProcessAntennasIQ2Bfiq.beamform(antennas_data[main_antenna_count:, sequence, :],
-                                                                             beam_azms,
-                                                                             freq,
-                                                                             intf_antenna_spacing))
+            main_beamformed_data = \
+                xp.append(main_beamformed_data,
+                          ProcessAntennasIQ2Bfiq.beamform(antennas_data[:main_antenna_count, sequence, :],
+                                                          beam_azms,
+                                                          freq,
+                                                          main_antenna_spacing))
+            intf_beamformed_data = \
+                xp.append(intf_beamformed_data,
+                          ProcessAntennasIQ2Bfiq.beamform(antennas_data[main_antenna_count:, sequence, :],
+                                                          beam_azms,
+                                                          freq,
+                                                          intf_antenna_spacing))
 
         all_data = xp.append(main_beamformed_data, intf_beamformed_data).flatten()
 
@@ -251,8 +253,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         beamrad = xp.pi * xp.float64(beamdir) / 180.0
 
         # Pointing to right of boresight, use point in middle (hypothetically antenna 7.5) as phshift=0
-        phshift = 2 * xp.pi * freq * \
-                  (((num_antennas - 1) / 2.0 - antenna) * antenna_spacing + centre_offset) * \
+        phshift = 2 * xp.pi * freq * (((num_antennas - 1) / 2.0 - antenna) * antenna_spacing + centre_offset) * \
                   xp.cos(xp.pi / 2.0 - beamrad) / speed_of_light
 
         # Bring into range (-2*pi, 2*pi)

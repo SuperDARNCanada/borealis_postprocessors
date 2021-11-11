@@ -151,15 +151,18 @@ class ProcessBfiq2Rawacf(BaseConvert):
         for sequence in range(num_sequences):
             # data input shape  = [num_antenna_arrays, num_beams, num_samps]
             # data return shape = [num_beams, num_range_gates, num_lags]
-            main_corrs_unavg[sequence, ...] = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, sequence, :, :],
-                                                                                    bfiq_data[0, sequence, :, :],
-                                                                                           record)
-            intf_corrs_unavg[sequence, ...] = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, sequence, :, :],
-                                                                                    bfiq_data[1, sequence, :, :],
-                                                                                           record)
-            cross_corrs_unavg[sequence, ...] = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, sequence, :, :],
-                                                                                     bfiq_data[1, sequence, :, :],
-                                                                                            record)
+            main_corrs_unavg[sequence, ...] = \
+                ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, sequence, :, :],
+                                                             bfiq_data[0, sequence, :, :],
+                                                             record)
+            intf_corrs_unavg[sequence, ...] = \
+                ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, sequence, :, :],
+                                                             bfiq_data[1, sequence, :, :],
+                                                             record)
+            cross_corrs_unavg[sequence, ...] = \
+                ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, sequence, :, :],
+                                                             bfiq_data[1, sequence, :, :],
+                                                             record)
 
         if averaging_method == 'median':
             main_corrs = xp.median(xp.real(main_corrs_unavg), axis=0) + 1j * xp.median(xp.imag(main_corrs_unavg),
