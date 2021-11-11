@@ -37,15 +37,15 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
     Attributes
     ----------
-    filename: str
+    infile: str
         The filename of the input antennas_iq file.
-    output_file: str
+    outfile: str
         The file name of output file
-    file_structure: str
+    infile_structure: str
         The write structure of the file. Structures include:
         'array'
         'site'
-    final_structure: str
+    outfile_structure: str
         The desired structure of the output file. Same structures as
         above, with the addition of 'dmap'.
     averaging_method: str
@@ -53,25 +53,25 @@ class ProcessBfiq2Rawacf(BaseConvert):
         Acceptable values are 'mean' and 'median'.
     """
 
-    def __init__(self, filename: str, output_file: str, file_structure: str, final_structure: str,
+    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
                  averaging_method: str = 'mean'):
         """
         Initialize the attributes of the class.
 
         Parameters
         ----------
-        filename: str
+        infile: str
             Path to input file.
-        output_file: str
+        outfile: str
             Path to output file.
-        file_structure: str
+        infile_structure: str
             Borealis structure of input file. Either 'array' or 'site'.
-        final_structure: str
+        outfile_structure: str
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
         averaging_method: str
             Method for averaging correlations across sequences. Either 'median' or 'mean'.
         """
-        super().__init__(filename, output_file, 'bfiq', 'rawacf', file_structure, final_structure)
+        super().__init__(infile, outfile, 'bfiq', 'rawacf', infile_structure, outfile_structure)
         self.averaging_method = averaging_method
 
         self.process_file()

@@ -44,63 +44,63 @@ class BaseConvert(object):
 
     Attributes
     ----------
-    filename: str
+    infile: str
         The filename of the input file containing SuperDARN data.
-    output_file: str
+    outfile: str
         The file name of output file
-    file_type: str
+    infile_type: str
         Type of data file. Types include:
         'antennas_iq'
         'bfiq'
         'rawacf'
-    final_type: str
+    outfile_type: str
         Desired type of output data file. Same types as above.
-    file_structure: str
+    infile_structure: str
         The write structure of the file. Structures include:
         'array'
         'site'
         'iqdat' (bfiq only)
         'dmap' (rawacf only)
         All borealis files are either 'site' or 'array' structured.
-    final_structure: str
+    outfile_structure: str
         The desired structure of the output file. Same structures as
         above.
     """
-    def __init__(self, filename: str, output_file: str, file_type: str, final_type: str, file_structure: str,
-                 final_structure: str):
+    def __init__(self, infile: str, outfile: str, infile_type: str, outfile_type: str, infile_structure: str,
+                 outfile_structure: str):
         """
         Initializes the attributes of the class.
 
         Parameters
         ----------
-        filename: str
+        infile: str
             Path to the input file
-        output_file: str
+        outfile: str
             Path to the output file
-        file_type: str
+        infile_type: str
             Borealis file type of input file. Supported types are:
             'antennas_iq'
             'bfiq'
             'rawacf'
-        final_type: str
+        outfile_type: str
             Borealis file type of output file. Supported types are same as for file_type.
-        file_structure: str
+        infile_structure: str
             Borealis file structure of input file. Supported structures are:
             'array'
             'site'
-        final_structure: str
+        outfile_structure: str
             Borealis file structure of output file. Supported structures are:
             'array'
             'site'
             'iqdat' (bfiq only)
             'dmap' (rawacf only)
         """
-        self.filename = filename
-        self.output_file = output_file
-        self.file_type = file_type
-        self.file_structure = file_structure
-        self.final_type = final_type
-        self.final_structure = final_structure
+        self.infile = infile
+        self.outfile = outfile
+        self.infile_type = infile_type
+        self.infile_structure = infile_structure
+        self.outfile_type = outfile_type
+        self.outfile_structure = outfile_structure
         self.check_args()
 
         self.averaging_method = None
@@ -109,26 +109,26 @@ class BaseConvert(object):
     def check_args(self):
         file_structure_mapping = BaseConvert.structure_mapping()
 
-        if self.file_structure not in file_structure_mapping[self.file_type]:
+        if self.infile_structure not in file_structure_mapping[self.infile_type]:
             raise conversion_exceptions.ImproperFileStructureError(
                 'Input file structure "{structure}" is not compatible with '
                 'input file type "{type}": Valid structures for {type} are '
-                '{valid}'.format(structure=self.file_structure,
-                                 type=self.file_type,
-                                 valid=file_structure_mapping[self.file_type])
+                '{valid}'.format(structure=self.infile_structure,
+                                 type=self.infile_type,
+                                 valid=file_structure_mapping[self.infile_type])
             )
-        if self.final_structure not in file_structure_mapping[self.final_type]:
+        if self.outfile_structure not in file_structure_mapping[self.outfile_type]:
             raise conversion_exceptions.ImproperFileStructureError(
                 'Output file structure "{structure}" is not compatible with '
                 'output file type "{type}": Valid structures for {type} are '
-                '{valid}'.format(structure=self.final_structure,
-                                 type=self.final_type,
-                                 valid=file_structure_mapping[self.final_type])
+                '{valid}'.format(structure=self.outfile_structure,
+                                 type=self.outfile_type,
+                                 valid=file_structure_mapping[self.outfile_type])
             )
-        if self.file_structure not in ['array', 'site']:
+        if self.infile_structure not in ['array', 'site']:
             raise conversion_exceptions.ConversionUpstreamError(
                 'Input file structure "{}" cannot be reprocessed into any other ' 
-                'format.'.format(self.file_structure)
+                'format.'.format(self.infile_structure)
             )
 
     def process_file(self):
@@ -147,21 +147,21 @@ class BaseConvert(object):
         ProcessBfiq2Rawacf
         """
         # Restructure to 'site' format if necessary
-        if self.file_structure != 'site':
-            file_to_process = '{}.site.tmp'.format(self.filename)
+        if self.infile_structure != 'site':
+            file_to_process = '{}.site.tmp'.format(self.infile)
             self._temp_files.append(file_to_process)
             # Restructure file to site format for processing
-            postprocessing_logger.info('Restructuring file {} --> {}'.format(self.filename, file_to_process))
-            self.restructure(self.filename, file_to_process, self.file_type, self.file_structure, 'site')
+            postprocessing_logger.info('Restructuring file {} --> {}'.format(self.infile, file_to_process))
+            self.restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site')
         else:
-            file_to_process = self.filename
+            file_to_process = self.infile
 
         # Prepare to restructure after processing, if necessary
-        if self.final_structure != 'site':
-            processed_file = '{}.site.tmp'.format(self.output_file)
+        if self.outfile_structure != 'site':
+            processed_file = '{}.site.tmp'.format(self.outfile)
             self._temp_files.append(processed_file)
         else:
-            processed_file = self.output_file
+            processed_file = self.outfile
 
         postprocessing_logger.info('Converting file {} --> {}'.format(file_to_process, processed_file))
         
@@ -190,9 +190,9 @@ class BaseConvert(object):
             os.remove(tempfile)
 
         # Restructure to final structure format, if necessary
-        if self.final_structure != 'site':
-            postprocessing_logger.info('Restructuring file {} --> {}'.format(processed_file, self.final_structure))
-            self.restructure(processed_file, self.output_file, self.final_type, 'site', self.final_structure)
+        if self.outfile_structure != 'site':
+            postprocessing_logger.info('Restructuring file {} --> {}'.format(processed_file, self.outfile_structure))
+            self.restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure)
 
         self._remove_temp_files()
 
@@ -225,7 +225,7 @@ class BaseConvert(object):
         return record
 
     @staticmethod
-    def restructure(infile_name, outfile_name, file_type, file_structure, final_structure):
+    def restructure(infile_name, outfile_name, infile_type, infile_structure, outfile_structure):
         """
         This method restructures filename of structure "file_structure" into "final_structure".
 
@@ -235,28 +235,30 @@ class BaseConvert(object):
             Name of the original file.
         outfile_name: str
             Name of the restructured file.
-        file_structure: str
+        infile_type: str
+            Borealis file type of the files.
+        infile_structure: str
             The current write structure of the file. One of 'array' or 'site'.
-        final_structure: str
+        outfile_structure: str
             The desired write structure of the file. One of 'array', 'site', 'iqdat', or 'dmap'.
         """
         # dmap and iqdat are not borealis formats, so they are handled specially
-        if final_structure == 'dmap' or final_structure == 'iqdat':
-            pydarnio.BorealisConvert(infile_name, file_type, outfile_name,
-                                     borealis_file_structure=file_structure)
+        if outfile_structure == 'dmap' or outfile_structure == 'iqdat':
+            pydarnio.BorealisConvert(infile_name, infile_type, outfile_name,
+                                     borealis_file_structure=infile_structure)
             return
 
         # Get data from the file
-        reader = pydarnio.BorealisRead(infile_name, file_type, file_structure)
+        reader = pydarnio.BorealisRead(infile_name, infile_type, infile_structure)
 
         # Get data in correct format for writing to output file
-        if final_structure == 'site':
+        if outfile_structure == 'site':
             data = reader.records
         else:
             data = reader.arrays
 
         # Write to output file
-        pydarnio.BorealisWrite(outfile_name, data, file_type, final_structure)
+        pydarnio.BorealisWrite(outfile_name, data, infile_type, outfile_structure)
 
     @staticmethod
     def convert_to_numpy(data):

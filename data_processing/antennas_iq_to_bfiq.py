@@ -41,34 +41,34 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
 
     Attributes
     ----------
-    filename: str
+    infile: str
         The filename of the input antennas_iq file.
-    output_file: str
+    outfile: str
         The file name of output file
-    file_structure: str
+    infile_structure: str
         The write structure of the file. Structures include:
         'array'
         'site'
-    final_structure: str
+    outfile_structure: str
         The desired structure of the output file. Same structures as above, plus 'iqdat'.
     """
 
-    def __init__(self, filename: str, output_file: str, file_structure: str, final_structure: str):
+    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str):
         """
         Initialize the attributes of the class.
 
         Parameters
         ----------
-        filename: str
+        infile: str
             Path to input file.
-        output_file: str
+        outfile: str
             Path to output file.
-        file_structure: str
+        infile_structure: str
             Borealis structure of input file. Either 'array' or 'site'.
-        final_structure: str
+        outfile_structure: str
             Borealis structure of output file. Either 'array', 'site', or 'iqdat'.
         """
-        super().__init__(filename, output_file, 'antennas_iq', 'bfiq', file_structure, final_structure)
+        super().__init__(infile, outfile, 'antennas_iq', 'bfiq', infile_structure, outfile_structure)
 
         self.process_file()
 
