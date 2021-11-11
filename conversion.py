@@ -20,14 +20,13 @@ def usage_msg():
     """
     Return the usage message for this process.
     This is used if a -h flag or invalid arguments are provided.
-    :returns: the usage message
     """
 
-    usage_message = """ conversion.py [-h] infile outfile file_type final_type file_structure final_structure [--averaging-method a]
+    usage_message = """ conversion.py [-h] infile outfile infile_type outfile_type infile_structure outfile_structure [--averaging-method a]
     
     Pass in the filename you wish to convert, the filename you wish to save as, and the types and structures of both.
-    The script will convert the input file into an output file of type "final_type" and structure "final_structure". If 
-    the final type is rawacf, the averaging method may optionally be specified as well. """
+    The script will convert the input file into an output file of type "outfile_type" and structure "outfile_structure".
+    If the final type is rawacf, the averaging method may optionally be specified as well. """
 
     return usage_message
 
@@ -39,13 +38,13 @@ def conversion_parser():
     parser.add_argument("outfile",
                         help="Path to the location where the output file should be stored. "
                              "(e.g. 20190327.2210.38.sas.0.rawacf.hdf5.site)")
-    parser.add_argument("filetype", choices=['antennas_iq', 'bfiq', 'rawacf'],
+    parser.add_argument("infile-type", choices=['antennas_iq', 'bfiq', 'rawacf'],
                         help="Type of input file.")
-    parser.add_argument("final-type", choices=['antennas_iq', 'bfiq', 'rawacf'],
+    parser.add_argument("outfile-type", choices=['antennas_iq', 'bfiq', 'rawacf'],
                         help="Type of output file.")
-    parser.add_argument("file-structure", choices=['array', 'site'],
+    parser.add_argument("infile-structure", choices=['array', 'site'],
                         help="Structure of input file.")
-    parser.add_argument("final-structure", choices=['array', 'site', 'iqdat', 'dmap'],
+    parser.add_argument("outfile-structure", choices=['array', 'site', 'iqdat', 'dmap'],
                         help="Structure of output file.")
     parser.add_argument("-a", "--averaging-method", required=False, default='mean', choices=['mean', 'median'],
                         help="Averaging method for generating rawacf type file. Default mean.")
@@ -69,22 +68,22 @@ class ConvertFile(object):
 
     Attributes
     ----------
-    filename: str
+    infile: str
         The filename of the input file containing SuperDARN data.
-    output_file: str
+    outfile: str
         The file name of output file
-    file_type: str
+    infile_type: str
         Type of data file. Types include:
         'antennas_iq'
         'bfiq'
         'rawacf'
-    final_type: str
+    outfile_type: str
         Desired type of output data file. Same types as above.
-    file_structure: str
+    infile_structure: str
         The write structure of the file. Structures include:
         'array'
         'site'
-    final_structure: str
+    outfile_structure: str
         The desired structure of the output file. Structures supported are:
         'array'
         'site'
@@ -95,20 +94,20 @@ class ConvertFile(object):
         Acceptable values are 'mean' and 'median'.
     """
 
-    def __init__(self, filename: str, output_file: str, file_type: str, final_type: str,
-                 file_structure: str, final_structure: str, averaging_method: str = 'mean'):
-        self.filename = filename
-        self.output_file = output_file
-        self.file_type = file_type
-        self.final_type = final_type
-        self.file_structure = file_structure
-        self.final_structure = final_structure
+    def __init__(self, infile: str, outfile: str, infile_type: str, outfile_type: str,
+                 infile_structure: str, outfile_structure: str, averaging_method: str = 'mean'):
+        self.infile = infile
+        self.outfile = outfile
+        self.infile_type = infile_type
+        self.outfile_type = outfile_type
+        self.infile_structure = infile_structure
+        self.outfile_structure = outfile_structure
         self.averaging_method = averaging_method
         self._temp_files = []
 
-        if not os.path.isfile(self.filename):
+        if not os.path.isfile(self.infile):
             raise conversion_exceptions.FileDoesNotExistError(
-                'Input file {}'.format(self.filename)
+                'Input file {}'.format(self.infile)
             )
 
         self._converter = self.get_converter()
@@ -122,57 +121,57 @@ class ConvertFile(object):
         -------
         Instantiated converter object
         """
-        if self.final_type not in BaseConvert.type_mapping().keys():
+        if self.outfile_type not in BaseConvert.type_mapping().keys():
             raise conversion_exceptions.ImproperFileTypeError(
                 'Output file type "{}" not supported. Supported types '
                 'are {}'
-                ''.format(self.final_type, list(BaseConvert.type_mapping().keys()))
+                ''.format(self.outfile_type, list(BaseConvert.type_mapping().keys()))
             )
 
         # Only restructuring necessary
-        if self.file_type == self.final_type:
-            if self.file_structure == self.final_structure:
+        if self.infile_type == self.outfile_type:
+            if self.infile_structure == self.outfile_structure:
                 raise conversion_exceptions.NoConversionNecessaryError(
                     'Desired output format is same as input format.'
                 )
-            return BaseConvert.restructure(self.filename, self.output_file, self.file_type, self.file_structure,
-                                           self.final_structure)
+            return BaseConvert.restructure(self.infile, self.outfile, self.infile_type, self.infile_structure,
+                                           self.outfile_structure)
 
-        if self.file_type == 'antennas_iq':
-            if self.final_type == 'bfiq':
-                return ProcessAntennasIQ2Bfiq(self.filename, self.output_file, self.file_structure,
-                                              self.final_structure)
-            elif self.final_type == 'rawacf':
-                return ProcessAntennasIQ2Rawacf(self.filename, self.output_file, self.file_structure,
-                                                self.final_structure, self.averaging_method)
+        if self.infile_type == 'antennas_iq':
+            if self.outfile_type == 'bfiq':
+                return ProcessAntennasIQ2Bfiq(self.infile, self.outfile, self.infile_structure,
+                                              self.outfile_structure)
+            elif self.outfile_type == 'rawacf':
+                return ProcessAntennasIQ2Rawacf(self.infile, self.outfile, self.infile_structure,
+                                                self.outfile_structure, self.averaging_method)
             else:
                 raise conversion_exceptions.ConversionUpstreamError(
-                    'Conversion from {filetype} to {final_type} is '
+                    'Conversion from {infile_type} to {outfile_type} is '
                     'not supported. Only downstream processing is '
-                    'possible. Downstream types for {filetype} are '
-                    '{downstream}'.format(filetype=self.file_type,
-                                          final_type=self.final_type,
-                                          downstream=BaseConvert.type_mapping()[self.final_type])
+                    'possible. Downstream types for {infile_type} are '
+                    '{downstream}'.format(infile_type=self.infile_type,
+                                          outfile_type=self.outfile_type,
+                                          downstream=BaseConvert.type_mapping()[self.outfile_type])
                 )
-        elif self.file_type == 'bfiq':
-            if self.final_type == 'rawacf':
-                return ProcessBfiq2Rawacf(self.filename, self.output_file, self.file_structure, self.final_structure,
+        elif self.infile_type == 'bfiq':
+            if self.outfile_type == 'rawacf':
+                return ProcessBfiq2Rawacf(self.infile, self.outfile, self.infile_structure, self.outfile_structure,
                                           self.averaging_method)
             else:
                 raise conversion_exceptions.ConversionUpstreamError(
-                    'Conversion from {filetype} to {final_type} is '
+                    'Conversion from {infile_type} to {outfile_type} is '
                     'not supported. Only downstream processing is '
-                    'possible. Downstream types for {filetype} are '
-                    '{downstream}'.format(filetype=self.file_type,
-                                          final_type=self.final_type,
-                                          downstream=BaseConvert.type_mapping()[self.final_type])
+                    'possible. Downstream types for {infile_type} are '
+                    '{downstream}'.format(infile_type=self.infile_type,
+                                          outfile_type=self.outfile_type,
+                                          downstream=BaseConvert.type_mapping()[self.outfile_type])
                 )
 
         else:
             raise conversion_exceptions.ImproperFileTypeError(
                 'Input file type "{}" not supported. Supported types '
                 'are {}'
-                ''.format(self.file_type, list(BaseConvert.type_mapping().keys()))
+                ''.format(self.infile_type, list(BaseConvert.type_mapping().keys()))
             )
 
 
@@ -180,7 +179,7 @@ def main():
     parser = conversion_parser()
     args = parser.parse_args()
 
-    ConvertFile(args.infile, args.outfile, args.filetype, args.final_type, args.file_structure, args.final_structure,
+    ConvertFile(args.infile, args.outfile, args.infile_type, args.outfile_type, args.infile_structure, args.outfile_structure,
                 averaging_method=args.averaging_method)
 
 
