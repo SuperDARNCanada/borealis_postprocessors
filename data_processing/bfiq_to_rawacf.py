@@ -5,12 +5,11 @@ This file contains functions for converting bfiq files
 to rawacf files.
 """
 import logging
+import numpy as np
 from collections import OrderedDict
 from typing import Union
 
 from data_processing.convert_base import BaseConvert
-
-import numpy as np
 
 try:
     import cupy as xp

@@ -7,7 +7,6 @@ SuperDARN data files.
 
 import argparse
 import os
-from typing import Union
 
 from data_processing.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
 from data_processing.antennas_iq_to_rawacf import ProcessAntennasIQ2Rawacf

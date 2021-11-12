@@ -13,7 +13,6 @@ from scipy.constants import speed_of_light
 
 from data_processing.convert_base import BaseConvert
 
-
 try:
     import cupy as xp
 except ImportError:
