@@ -133,9 +133,9 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         intf_beamformed_data = xp.array([], dtype=xp.complex64)
         main_antenna_count = record['main_antenna_count']
 
-        station_id = record['station_id']
-        main_antenna_spacing = radar_dict[station_id]['main_antenna_spacing']
-        intf_antenna_spacing = radar_dict[station_id]['intf_antenna_spacing']
+        station = record['station']
+        main_antenna_spacing = radar_dict[station]['main_antenna_spacing']
+        intf_antenna_spacing = radar_dict[station]['intf_antenna_spacing']
 
         # Loop through every sequence and beamform the data.
         # Output shape after loop is [num_sequences, num_beams, num_samps]
