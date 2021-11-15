@@ -117,9 +117,6 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         """
         beam_azms = record['beam_azms']
         freq = record['freq']
-        pulse_phase_offset = record['pulse_phase_offset']
-        if pulse_phase_offset is None:
-            pulse_phase_offset = [0.0] * len(record['pulses'])
 
         # antennas data shape  = [num_antennas, num_sequences, num_samps]
         antennas_data = record['data']
