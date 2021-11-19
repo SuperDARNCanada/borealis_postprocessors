@@ -90,7 +90,7 @@ class ReprocessRawacfLag0(BaseConvert):
 
         # First range offset in units of samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
-        sample_off = xp.int32(sample_off)
+        sample_off = np.int32(sample_off)
 
         # Start of second pulse in units of samples
         second_pulse_sample_num = np.int32(tau_in_samples) * record['pulses'][1] - sample_off - 1
