@@ -11,6 +11,7 @@ import os
 from data_processing.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
 from data_processing.antennas_iq_to_rawacf import ProcessAntennasIQ2Rawacf
 from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
+from data_processing.convert_base import BaseConvert
 from data_processing.utils.restructure import FILE_TYPE_MAPPING, restructure
 from exceptions import conversion_exceptions
 
@@ -132,7 +133,9 @@ class ConvertFile(object):
                 raise conversion_exceptions.NoConversionNecessaryError(
                     'Desired output format is same as input format.'
                 )
-            return restructure(self.infile, self.outfile, self.infile_type, self.infile_structure,
+            # Restructure file, then return BaseConvert object for consistency
+            restructure(self.infile, self.outfile, self.infile_type, self.infile_structure, self.outfile_structure)
+            return BaseConvert(self.infile, self.outfile, self.infile_type, self.outfile_type, self.infile_structure,
                                self.outfile_structure)
 
         if self.infile_type == 'antennas_iq':
