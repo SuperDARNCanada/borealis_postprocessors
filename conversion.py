@@ -106,7 +106,7 @@ class ConvertFile(object):
 
         if not os.path.isfile(self.infile):
             raise conversion_exceptions.FileDoesNotExistError(
-                'Input file {}'.format(self.infile)
+                f'Input file {self.infile}'
             )
 
         self._converter = self.get_converter()
@@ -122,9 +122,8 @@ class ConvertFile(object):
         """
         if self.outfile_type not in FILE_TYPE_MAPPING.keys():
             raise conversion_exceptions.ImproperFileTypeError(
-                'Output file type "{}" not supported. Supported types '
-                'are {}'
-                ''.format(self.outfile_type, list(FILE_TYPE_MAPPING.keys()))
+                f'Output file type "{self.outfile_type}" not supported. Supported types '
+                f'are {list(FILE_TYPE_MAPPING.keys())}'
             )
 
         # Only restructuring necessary
@@ -145,12 +144,9 @@ class ConvertFile(object):
                                                 self.outfile_structure, self.averaging_method)
             else:
                 raise conversion_exceptions.ConversionUpstreamError(
-                    'Conversion from {infile_type} to {outfile_type} is '
-                    'not supported. Only downstream processing is '
-                    'possible. Downstream types for {infile_type} are '
-                    '{downstream}'.format(infile_type=self.infile_type,
-                                          outfile_type=self.outfile_type,
-                                          downstream=FILE_TYPE_MAPPING[self.outfile_type])
+                    f'Conversion from {self.infile_type} to {self.outfile_type} is not supported. Only downstream '
+                    f'processing is possible. Downstream types for {self.infile_type} are '
+                    f'{FILE_TYPE_MAPPING[self.outfile_type]}'
                 )
         elif self.infile_type == 'bfiq':
             if self.outfile_type == 'rawacf':
@@ -158,19 +154,15 @@ class ConvertFile(object):
                                           self.averaging_method)
             else:
                 raise conversion_exceptions.ConversionUpstreamError(
-                    'Conversion from {infile_type} to {outfile_type} is '
-                    'not supported. Only downstream processing is '
-                    'possible. Downstream types for {infile_type} are '
-                    '{downstream}'.format(infile_type=self.infile_type,
-                                          outfile_type=self.outfile_type,
-                                          downstream=FILE_TYPE_MAPPING[self.outfile_type])
+                    f'Conversion from {self.infile_type} to {self.outfile_type} is not supported. Only downstream '
+                    f'processing is possible. Downstream types for {self.infile_type} are '
+                    f'{FILE_TYPE_MAPPING[self.outfile_type]}'
                 )
 
         else:
             raise conversion_exceptions.ImproperFileTypeError(
-                'Input file type "{}" not supported. Supported types '
-                'are {}'
-                ''.format(self.infile_type, list(FILE_TYPE_MAPPING.keys()))
+                f'Input file type "{self.infile_type}" not supported. Supported types are '
+                f'{list(FILE_TYPE_MAPPING.keys())}'
             )
 
 
@@ -178,8 +170,8 @@ def main():
     parser = conversion_parser()
     args = parser.parse_args()
 
-    ConvertFile(args.infile, args.outfile, args.infile_type, args.outfile_type, args.infile_structure, args.outfile_structure,
-                averaging_method=args.averaging_method)
+    ConvertFile(args.infile, args.outfile, args.infile_type, args.outfile_type, args.infile_structure,
+                args.outfile_structure, averaging_method=args.averaging_method)
 
 
 if __name__ == "__main__":

@@ -29,8 +29,7 @@ class GeneralConversionError(Exception):
     """
 
     def __init__(self, error_str: str):
-        self.message = "Unexpected error converting files: {error_str}"\
-            "".format(error_str=error_str)
+        self.message = f"Unexpected error converting files: {error_str}"
         postprocessing_logger.error(self.message)
         Exception.__init__(self, self.message)
 
@@ -55,8 +54,7 @@ class FileDeletionError(Exception):
     """
 
     def __init__(self, error_str: str):
-        self.message = "Error deleting file: {error_str}"\
-            "".format(error_str=error_str)
+        self.message = f"Error deleting file: {error_str}"
         postprocessing_logger.error(self.message)
         Exception.__init__(self, self.message)
 
@@ -81,8 +79,7 @@ class FileDoesNotExistError(Exception):
     """
 
     def __init__(self, error_str: str):
-        self.message = "File does not exist: {error_str}"\
-            "".format(error_str=error_str)
+        self.message = f"File does not exist: {error_str}"
         postprocessing_logger.error(self.message)
         Exception.__init__(self, self.message)
 
@@ -108,8 +105,7 @@ class NoConversionNecessaryError(Exception):
     """
 
     def __init__(self, error_str: str):
-        self.message = "File type and structure are identical: "\
-            "{error_str}".format(error_str=error_str)
+        self.message = f"File type and structure are identical: {error_str}"
         postprocessing_logger.error(self.message)
         Exception.__init__(self, self.message)
 
@@ -135,9 +131,7 @@ class ImproperFileStructureError(Exception):
     """
 
     def __init__(self, error_str: str):
-        self.message = "File structure is not a valid "\
-            "SuperDARN data file structure: {error_str}"\
-            "".format(error_str=error_str)
+        self.message = f"File structure is not a valid SuperDARN data file structure: {error_str}"
         postprocessing_logger.error(self.message)
         Exception.__init__(self, self.message)
 
@@ -162,9 +156,7 @@ class ImproperFileTypeError(Exception):
     """
 
     def __init__(self, error_str: str):
-        self.message = "File type is not a valid "\
-            "SuperDARN data file type: {error_str}"\
-            "".format(error_str=error_str)
+        self.message = f"File type is not a valid SuperDARN data file type: {error_str}"
         postprocessing_logger.error(self.message)
         Exception.__init__(self, self.message)
 
@@ -190,8 +182,6 @@ class ConversionUpstreamError(Exception):
     """
 
     def __init__(self, error_str: str):
-        self.message = "The file cannot be converted due to the "\
-            " following error: {error_str}"\
-            "".format(error_str=error_str)
+        self.message = f"The file cannot be converted due to the following error: {error_str}"
         postprocessing_logger.error(self.message)
         Exception.__init__(self, self.message)

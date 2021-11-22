@@ -107,24 +107,19 @@ class BaseConvert(object):
 
         if self.infile_structure not in FILE_STRUCTURE_MAPPING[self.infile_type]:
             raise conversion_exceptions.ImproperFileStructureError(
-                'Input file structure "{structure}" is not compatible with '
-                'input file type "{type}": Valid structures for {type} are '
-                '{valid}'.format(structure=self.infile_structure,
-                                 type=self.infile_type,
-                                 valid=FILE_STRUCTURE_MAPPING[self.infile_type])
+                f'Input file structure "{self.infile_structure}" is not compatible with input file type '
+                f'"{self.infile_type}": Valid structures for {self.infile_type} are '
+                f'{FILE_STRUCTURE_MAPPING[self.infile_type]}'
             )
         if self.outfile_structure not in FILE_STRUCTURE_MAPPING[self.outfile_type]:
             raise conversion_exceptions.ImproperFileStructureError(
-                'Output file structure "{structure}" is not compatible with '
-                'output file type "{type}": Valid structures for {type} are '
-                '{valid}'.format(structure=self.outfile_structure,
-                                 type=self.outfile_type,
-                                 valid=FILE_STRUCTURE_MAPPING[self.outfile_type])
+                f'Output file structure "{self.outfile_structure}" is not compatible with output file type '
+                f'"{self.outfile_type}": Valid structures for {self.outfile_type} are '
+                f'{FILE_STRUCTURE_MAPPING[self.outfile_type]}'
             )
         if self.infile_structure not in ['array', 'site']:
             raise conversion_exceptions.ConversionUpstreamError(
-                'Input file structure "{}" cannot be reprocessed into any other ' 
-                'format.'.format(self.infile_structure)
+                f'Input file structure "{self.infile_structure}" cannot be reprocessed into any other format.'
             )
 
     def process_file(self):
@@ -144,22 +139,22 @@ class BaseConvert(object):
         """
         # Restructure to 'site' format if necessary
         if self.infile_structure != 'site':
-            file_to_process = '{}.site.tmp'.format(self.infile)
+            file_to_process = f'{self.infile}.site.tmp'
             self._temp_files.append(file_to_process)
             # Restructure file to site format for processing
-            postprocessing_logger.info('Restructuring file {} --> {}'.format(self.infile, file_to_process))
+            postprocessing_logger.info(f'Restructuring file {self.infile} --> {file_to_process}')
             restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site')
         else:
             file_to_process = self.infile
 
         # Prepare to restructure after processing, if necessary
         if self.outfile_structure != 'site':
-            processed_file = '{}.site.tmp'.format(self.outfile)
+            processed_file = f'{self.outfile}.site.tmp'
             self._temp_files.append(processed_file)
         else:
             processed_file = self.outfile
 
-        postprocessing_logger.info('Converting file {} --> {}'.format(file_to_process, processed_file))
+        postprocessing_logger.info(f'Converting file {file_to_process} --> {processed_file}')
         
         # Load file
         group = dd.io.load(file_to_process)
@@ -174,12 +169,11 @@ class BaseConvert(object):
             formatted_record = convert_to_numpy(beamformed_record)
 
             # Save record to temporary file
-            tempfile = '/tmp/{}.tmp'.format(record)
+            tempfile = f'/tmp/{record}.tmp'
             dd.io.save(tempfile, formatted_record, compression=None)
 
             # Copy record to output file
-            cmd = 'h5copy -i {} -o {} -s {} -d {}'
-            cmd = cmd.format(tempfile, processed_file, '/', '/{}'.format(record))
+            cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {record}'
             sp.call(cmd.split())
 
             # Remove temporary file
@@ -187,7 +181,7 @@ class BaseConvert(object):
 
         # Restructure to final structure format, if necessary
         if self.outfile_structure != 'site':
-            postprocessing_logger.info('Restructuring file {} --> {}'.format(processed_file, self.outfile_structure))
+            postprocessing_logger.info(f'Restructuring file {processed_file} --> {self.outfile}')
             restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure)
 
         self._remove_temp_files()
