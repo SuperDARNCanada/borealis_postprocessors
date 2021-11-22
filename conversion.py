@@ -10,8 +10,8 @@ import os
 
 from data_processing.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
 from data_processing.antennas_iq_to_rawacf import ProcessAntennasIQ2Rawacf
-from data_processing.convert_base import BaseConvert
 from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
+from data_processing.utils.restructure import FILE_TYPE_MAPPING, restructure
 from exceptions import conversion_exceptions
 
 
@@ -120,10 +120,10 @@ class ConvertFile(object):
         -------
         Instantiated converter object
         """
-        if self.outfile_type not in BaseConvert.type_mapping().keys():
+        if self.outfile_type not in FILE_TYPE_MAPPING.keys():
             raise conversion_exceptions.ImproperFileTypeError(
                 f'Output file type "{self.outfile_type}" not supported. Supported types '
-                f'are {list(BaseConvert.type_mapping().keys())}'
+                f'are {list(FILE_TYPE_MAPPING.keys())}'
             )
 
         # Only restructuring necessary
@@ -132,8 +132,8 @@ class ConvertFile(object):
                 raise conversion_exceptions.NoConversionNecessaryError(
                     'Desired output format is same as input format.'
                 )
-            return BaseConvert.restructure(self.infile, self.outfile, self.infile_type, self.infile_structure,
-                                           self.outfile_structure)
+            return restructure(self.infile, self.outfile, self.infile_type, self.infile_structure,
+                               self.outfile_structure)
 
         if self.infile_type == 'antennas_iq':
             if self.outfile_type == 'bfiq':
@@ -146,7 +146,7 @@ class ConvertFile(object):
                 raise conversion_exceptions.ConversionUpstreamError(
                     f'Conversion from {self.infile_type} to {self.outfile_type} is not supported. Only downstream '
                     f'processing is possible. Downstream types for {self.infile_type} are '
-                    f'{BaseConvert.type_mapping()[self.outfile_type]}'
+                    f'{FILE_TYPE_MAPPING[self.outfile_type]}'
                 )
         elif self.infile_type == 'bfiq':
             if self.outfile_type == 'rawacf':
@@ -156,13 +156,13 @@ class ConvertFile(object):
                 raise conversion_exceptions.ConversionUpstreamError(
                     f'Conversion from {self.infile_type} to {self.outfile_type} is not supported. Only downstream '
                     f'processing is possible. Downstream types for {self.infile_type} are '
-                    f'{BaseConvert.type_mapping()[self.outfile_type]}'
+                    f'{FILE_TYPE_MAPPING[self.outfile_type]}'
                 )
 
         else:
             raise conversion_exceptions.ImproperFileTypeError(
                 f'Input file type "{self.infile_type}" not supported. Supported types are '
-                f'{list(BaseConvert.type_mapping().keys())}'
+                f'{list(FILE_TYPE_MAPPING.keys())}'
             )
 
 

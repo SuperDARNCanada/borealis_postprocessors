@@ -8,11 +8,9 @@ import os
 import subprocess as sp
 from collections import OrderedDict
 from typing import Union
-
-import numpy as np
 import deepdish as dd
-import pydarnio
 
+from data_processing.utils.restructure import restructure, convert_to_numpy, FILE_STRUCTURE_MAPPING
 from exceptions import conversion_exceptions
 
 try:
@@ -106,19 +104,18 @@ class BaseConvert(object):
         self._temp_files = []
 
     def check_args(self):
-        file_structure_mapping = BaseConvert.structure_mapping()
 
-        if self.infile_structure not in file_structure_mapping[self.infile_type]:
+        if self.infile_structure not in FILE_STRUCTURE_MAPPING[self.infile_type]:
             raise conversion_exceptions.ImproperFileStructureError(
                 f'Input file structure "{self.infile_structure}" is not compatible with input file type '
                 f'"{self.infile_type}": Valid structures for {self.infile_type} are '
-                f'{file_structure_mapping[self.infile_type]}'
+                f'{FILE_STRUCTURE_MAPPING[self.infile_type]}'
             )
-        if self.outfile_structure not in file_structure_mapping[self.outfile_type]:
+        if self.outfile_structure not in FILE_STRUCTURE_MAPPING[self.outfile_type]:
             raise conversion_exceptions.ImproperFileStructureError(
                 f'Output file structure "{self.outfile_structure}" is not compatible with output file type '
                 f'"{self.outfile_type}": Valid structures for {self.outfile_type} are '
-                f'{file_structure_mapping[self.outfile_type]}'
+                f'{FILE_STRUCTURE_MAPPING[self.outfile_type]}'
             )
         if self.infile_structure not in ['array', 'site']:
             raise conversion_exceptions.ConversionUpstreamError(
@@ -146,7 +143,7 @@ class BaseConvert(object):
             self._temp_files.append(file_to_process)
             # Restructure file to site format for processing
             postprocessing_logger.info(f'Restructuring file {self.infile} --> {file_to_process}')
-            self.restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site')
+            restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site')
         else:
             file_to_process = self.infile
 
@@ -169,7 +166,7 @@ class BaseConvert(object):
             beamformed_record = self.process_record(record_dict, self.averaging_method)
 
             # Convert to numpy arrays for saving to file with deepdish
-            formatted_record = self.convert_to_numpy(beamformed_record)
+            formatted_record = convert_to_numpy(beamformed_record)
 
             # Save record to temporary file
             tempfile = f'/tmp/{record}.tmp'
@@ -185,7 +182,7 @@ class BaseConvert(object):
         # Restructure to final structure format, if necessary
         if self.outfile_structure != 'site':
             postprocessing_logger.info(f'Restructuring file {processed_file} --> {self.outfile}')
-            self.restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure)
+            restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure)
 
         self._remove_temp_files()
 
@@ -216,97 +213,3 @@ class BaseConvert(object):
             of data for self.final_type.
         """
         return record
-
-    @staticmethod
-    def restructure(infile_name, outfile_name, infile_type, infile_structure, outfile_structure):
-        """
-        This method restructures filename of structure "file_structure" into "final_structure".
-
-        Parameters
-        ----------
-        infile_name: str
-            Name of the original file.
-        outfile_name: str
-            Name of the restructured file.
-        infile_type: str
-            Borealis file type of the files.
-        infile_structure: str
-            The current write structure of the file. One of 'array' or 'site'.
-        outfile_structure: str
-            The desired write structure of the file. One of 'array', 'site', 'iqdat', or 'dmap'.
-        """
-        # dmap and iqdat are not borealis formats, so they are handled specially
-        if outfile_structure == 'dmap' or outfile_structure == 'iqdat':
-            pydarnio.BorealisConvert(infile_name, infile_type, outfile_name,
-                                     borealis_file_structure=infile_structure)
-            return
-
-        # Get data from the file
-        reader = pydarnio.BorealisRead(infile_name, infile_type, infile_structure)
-
-        # Get data in correct format for writing to output file
-        if outfile_structure == 'site':
-            data = reader.records
-        else:
-            data = reader.arrays
-
-        # Write to output file
-        pydarnio.BorealisWrite(outfile_name, data, infile_type, outfile_structure)
-
-    @staticmethod
-    def convert_to_numpy(data):
-        """Converts lists stored in dict into numpy array. Recursive.
-        Args:
-            data (Python dictionary): Dictionary with lists to convert to numpy arrays.
-        """
-        for k, v in data.items():
-            if isinstance(v, dict):
-                BaseConvert.convert_to_numpy(v)
-            elif isinstance(v, list):
-                data[k] = np.array(v)
-            else:
-                continue
-        
-        return data
-
-    @staticmethod
-    def type_mapping():
-        """
-        Returns a dictionary mapping the accepted borealis file types to
-        the borealis file types that they can be processed into. The dictionary
-        keys are the valid input file types, and their values are lists of
-        file types which they can be processed into.
-
-        Returns
-        -------
-        file_type_mapping: dict
-            Mapping of input file types to allowed output file types.
-        """
-        file_type_mapping = {
-            'antennas_iq': ['antennas_iq', 'bfiq', 'rawacf'],
-            'bfiq': ['bfiq', 'rawacf'],
-            'rawacf': ['rawacf']
-        }
-
-        return file_type_mapping
-
-    @staticmethod
-    def structure_mapping():
-        """
-        Returns a dictionary mapping the accepted borealis file types to
-        the borealis file structures that they can be formatted as. The dictionary
-        keys are the valid input file types, and their values are lists of
-        file structures which they can be formatted as.
-
-        Returns
-        -------
-        file_structure_mapping: dict
-            Mapping of input file types to allowed output file types.
-        """
-        file_structure_mapping = {
-            'antennas_iq': ['site', 'array'],
-            'bfiq': ['site', 'array', 'iqdat'],
-            'rawacf': ['site', 'array', 'dmap']
-        }
-
-        return file_structure_mapping
