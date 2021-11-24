@@ -130,8 +130,6 @@ class ProcessBfiq2Rawacf(BaseConvert):
         """
         # TODO: Figure out how to remove pulse offsets
         pulse_phase_offset = record['pulse_phase_offset']
-        if pulse_phase_offset is None:
-            pulse_phase_offset = [0.0] * len(record['pulses'])
 
         # bfiq data shape  = [num_arrays, num_sequences, num_beams, num_samps]
         bfiq_data = record['data']
