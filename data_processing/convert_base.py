@@ -137,54 +137,58 @@ class BaseConvert(object):
         ProcessAntennasIQ2Rawacf
         ProcessBfiq2Rawacf
         """
-        # Restructure to 'site' format if necessary
-        if self.infile_structure != 'site':
-            file_to_process = f'{self.infile}.site.tmp'
-            self._temp_files.append(file_to_process)
-            # Restructure file to site format for processing
-            postprocessing_logger.info(f'Restructuring file {self.infile} --> {file_to_process}')
-            restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site')
-        else:
-            file_to_process = self.infile
+        try:
+            # Restructure to 'site' format if necessary
+            if self.infile_structure != 'site':
+                file_to_process = f'{self.infile}.site.tmp'
+                self._temp_files.append(file_to_process)
+                # Restructure file to site format for processing
+                postprocessing_logger.info(f'Restructuring file {self.infile} --> {file_to_process}')
+                restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site')
+            else:
+                file_to_process = self.infile
 
-        # Prepare to restructure after processing, if necessary
-        if self.outfile_structure != 'site':
-            processed_file = f'{self.outfile}.site.tmp'
-            self._temp_files.append(processed_file)
-        else:
-            processed_file = self.outfile
+            # Prepare to restructure after processing, if necessary
+            if self.outfile_structure != 'site':
+                processed_file = f'{self.outfile}.site.tmp'
+                self._temp_files.append(processed_file)
+            else:
+                processed_file = self.outfile
 
-        postprocessing_logger.info(f'Converting file {file_to_process} --> {processed_file}')
-        
-        # Load file
-        group = dd.io.load(file_to_process)
-        records = group.keys()
+            postprocessing_logger.info(f'Converting file {file_to_process} --> {processed_file}')
 
-        # Process each record
-        for record in records:
-            record_dict = group[record]
-            beamformed_record = self.process_record(record_dict, self.averaging_method, **kwargs)
+            # Load file
+            group = dd.io.load(file_to_process)
+            records = group.keys()
 
-            # Convert to numpy arrays for saving to file with deepdish
-            formatted_record = convert_to_numpy(beamformed_record)
+            # Process each record
+            for record in records:
+                record_dict = group[record]
+                beamformed_record = self.process_record(record_dict, self.averaging_method, **kwargs)
 
-            # Save record to temporary file
-            tempfile = f'/tmp/{record}.tmp'
-            dd.io.save(tempfile, formatted_record, compression=None)
+                # Convert to numpy arrays for saving to file with deepdish
+                formatted_record = convert_to_numpy(beamformed_record)
 
-            # Copy record to output file
-            cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {record}'
-            sp.call(cmd.split())
+                # Save record to temporary file
+                tempfile = f'/tmp/{record}.tmp'
+                dd.io.save(tempfile, formatted_record, compression=None)
 
-            # Remove temporary file
-            os.remove(tempfile)
+                # Copy record to output file
+                cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {record}'
+                sp.call(cmd.split())
 
-        # Restructure to final structure format, if necessary
-        if self.outfile_structure != 'site':
-            postprocessing_logger.info(f'Restructuring file {processed_file} --> {self.outfile}')
-            restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure)
+                # Remove temporary file
+                os.remove(tempfile)
 
-        self._remove_temp_files()
+            # Restructure to final structure format, if necessary
+            if self.outfile_structure != 'site':
+                postprocessing_logger.info(f'Restructuring file {processed_file} --> {self.outfile}')
+                restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure)
+        except (Exception,):
+            postprocessing_logger.error(f'Could not process file {self.infile} -> {self.outfile}. Removing all newly'
+                                        f' generated files.')
+        finally:
+            self._remove_temp_files()
 
     def _remove_temp_files(self):
         """
