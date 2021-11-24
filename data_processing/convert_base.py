@@ -122,7 +122,7 @@ class BaseConvert(object):
                 f'Input file structure "{self.infile_structure}" cannot be reprocessed into any other format.'
             )
 
-    def process_file(self):
+    def process_file(self, **kwargs):
         """
         Applies appropriate downstream processing to convert between file types (for site-structured
         files only). The processing chain is as follows:
@@ -163,7 +163,7 @@ class BaseConvert(object):
         # Process each record
         for record in records:
             record_dict = group[record]
-            beamformed_record = self.process_record(record_dict, self.averaging_method)
+            beamformed_record = self.process_record(record_dict, self.averaging_method, **kwargs)
 
             # Convert to numpy arrays for saving to file with deepdish
             formatted_record = convert_to_numpy(beamformed_record)
@@ -194,7 +194,7 @@ class BaseConvert(object):
             os.remove(filename)
 
     @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str]) -> OrderedDict:
+    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
         """
         This method should be overwritten by child classes, and should contain the necessary
         steps to process a record of input type to output type.
