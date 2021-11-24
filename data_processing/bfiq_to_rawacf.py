@@ -76,7 +76,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
         self.process_file()
 
     @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str]) -> OrderedDict:
+    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
         """
         Takes a record from a bfiq file and processes it into record for rawacf file.
 

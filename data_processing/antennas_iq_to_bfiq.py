@@ -72,7 +72,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         self.process_file()
 
     @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str]) -> OrderedDict:
+    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
         """
         Takes a record from an antennas_iq file and converts it into a bfiq record.
 
@@ -394,7 +394,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         # 3 extra samples taken for each record (not sure why)
         num_ranges = num_ranges - 3
 
-        return num_ranges
+        return xp.uint32(num_ranges)
 
     @staticmethod
     def get_data_descriptors() -> list:
