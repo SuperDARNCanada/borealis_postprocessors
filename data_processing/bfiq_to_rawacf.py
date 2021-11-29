@@ -128,9 +128,6 @@ class ProcessBfiq2Rawacf(BaseConvert):
         xcfs: np.array
             Cross-correlation of the main and interferometer arrays
         """
-        # TODO: Figure out how to remove pulse offsets
-        pulse_phase_offset = record['pulse_phase_offset']
-
         # bfiq data shape  = [num_arrays, num_sequences, num_beams, num_samps]
         bfiq_data = record['data']
 
@@ -218,6 +215,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
         pulses = record['pulses']
         pulse_phase_offsets = record['pulse_phase_offset']
+        if len(pulse_phase_offsets) == 0:
+            pulse_phase_offsets = np.zeros(len(pulses), dtype=np.float64)
 
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
