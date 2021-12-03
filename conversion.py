@@ -48,7 +48,11 @@ def conversion_parser():
                         help="Structure of output file.")
     parser.add_argument("-a", "--averaging-method", required=False, default='mean', choices=['mean', 'median'],
                         help="Averaging method for generating rawacf type file. Default mean.")
-
+    parser.add_argument("-m", "--multiprocessing", action="store_true", help="Enable multicore processing for batch jobs.")
+    parser.add_argument('-i', '--indirectory', type=str, help='directory containing ZVH files with data to be plotted.')
+    parser.add_argument('-o', '--outdirectory', type=str, default='', help='directory to save output plots.')
+    parser.add_argument('-p', '--pattern', type=str, help='the file naming pattern less the appending numbers.')
+    parser.add_argument('-v', '--verbose', action='store_true', help='explain what is being done verbosely.')
     return parser
 
 
@@ -169,13 +173,96 @@ class ConvertFile(object):
             )
 
 
-def main():
-    parser = conversion_parser()
-    args = parser.parse_args()
+def multiprocessing_conversion(arguments):
+    import multiprocessing as mp
 
+    # Todo: Use less than all the cores or give user options
+    pool = mp.Pool(mp.cpu_count())
+    result = pool.map(ConvertFile, arguments)
+
+    return
+
+
+def get_batch(directory, pattern, verbose=False):
+    """
+    Parameters
+    ----------
+        directory : str
+            The directory or parent directory containing the .csv files.
+        pattern : str
+            The file naming pattern of files to load; eg. rkn_vswr would yield all rkn_vswr*.csv in directory tree.
+        verbose : bool
+            True will print more information about whats going on, False squelches.
+
+    Returns
+    -------
+        all_data : dataclass
+            A dataclass containing all the data for each antenna from the Rohde & Schwarz .csv files.
+    """
+    import glob
+
+    files = glob.glob(directory + '**' + pattern, recursive=True)
+    if files == []:
+        files = glob.glob(directory + pattern + '*.csv')
+    verbose and print("files found:\n", files)
+
+    all_data = RSAllData()
+    all_data.site = site
+    for file in files:
+        name = os.path.basename(file).replace('.csv', '')
+        verbose and print(f'loading file: {file}')
+        df = pd.read_csv(file, encoding='cp1252')
+        skiprows = 0
+        for index, row in df.iterrows():
+            skiprows += 1
+            if 'date' in str(row).lower():
+                date = row[1].replace(' ', '').split('/')
+                date = '-'.join(date[::-1])
+                all_data.date = date
+            if '[hz]' in str(row).lower():
+                break
+
+        # The ZVH .csv files are in format cp1252 not utf-8 so using utf-8 will break on degrees symbol.
+        df = pd.read_csv(file, skiprows=skiprows, encoding='cp1252')
+        keys = list(df.keys())
+        freq = None
+        vswr = None
+        magnitude = None
+        phase = None
+        for key in keys:
+            if 'unnamed' in key.lower():  # Break from loop after the first ZVH sweep.
+                verbose and print('\t-end of first sweep')
+                break
+            if 'freq' in key.lower():
+                freq = df[key]
+                verbose and print(f'\t-FREQUENCY data found in: {name}')
+            if 'vswr' in key.lower():
+                vswr = df[key]
+                verbose and print(f'\t-VSWR data found in: {name}')
+            if 'mag' in key.lower():
+                magnitude = df[key]
+                verbose and print(f'\t-MAGNITUDE data found in: {name}')
+            if 'pha' in key.lower():
+                phase = df[key]
+                verbose and print(f'\t-PHASE data found in: {name}')
+
+        data = RSData(name=name, freq=freq, vswr=vswr, magnitude=magnitude, phase=phase)
+        all_data.names.append(name)
+        all_data.datas.append(data)
+
+    return all_data
+    return batch
+
+
+def main():
     ConvertFile(args.infile, args.outfile, args.infile_type, args.outfile_type, args.infile_structure,
                 args.outfile_structure, averaging_method=args.averaging_method)
 
 
 if __name__ == "__main__":
+    parser = conversion_parser()
+    args = parser.parse_args()
+
+    if args.multiprocessing:
+
     main()
