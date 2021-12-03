@@ -212,10 +212,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
             values.append(xp.array([]))
             return values
 
-        pulses = record['pulses']
+        pulses = list(record['pulses'])
         pulse_phase_offsets = record['pulse_phase_offset']
-        if len(pulse_phase_offsets) == 0:
-            pulse_phase_offsets = np.zeros(len(pulses), dtype=np.float64)
 
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
@@ -240,14 +238,24 @@ class ProcessBfiq2Rawacf(BaseConvert):
         # [num_beams, num_range_gates, num_lags]
         values = correlated[:, row, column]
 
-        # Remove phase encoding
-        for lagnum, lag in enumerate(record['lags']):
-            # Get phase offset for both pulses which contributed to the correlations for this lag
-            phase1 = pulse_phase_offsets[pulses.index(lag[0])]
-            phase2 = pulse_phase_offsets[pulses.index(lag[1])]
+        # Remove pulse_phase_offsets if they are present
+        if len(pulse_phase_offsets) == len(pulses):
+            # The indices in record['pulses'] of the pulses in each lag pair
+            # [num_lags]
+            lag1_indices = [pulses.index(val) for val in record['lags'][:, 0]]
+            lag2_indices = [pulses.index(val) for val in record['lags'][:, 1]]
 
-            # Remove the phase encoding
-            values[:, :, lag] = values[:, :, lag] * np.exp(1j * (phase1 - phase2))
+            # phase offset of first pulse - phase offset of second pulse, for all lag pairs
+            # [num_lags]
+            angle_offsets = [(pulse_phase_offsets[lag1_indices[i]] - pulse_phase_offsets[lag2_indices[i]])
+                             for i in range(len(lag1_indices))]
+
+            # [num_lags]
+            phase_offsets = xp.exp(1j * np.array(angle_offsets, np.float64))
+
+            values = xp.einsum('ijk,k->ijk', values, phase_offsets)
+        elif len(pulse_phase_offsets) != 0:
+            raise ValueError('Dimensions of pulse_phase_offsets does not match dimensions of pulses')
 
         # Find the sample that corresponds to the second pulse transmitting
         second_pulse_sample_num = xp.int32(tau_in_samples) * record['pulses'][1] - sample_off - 1
