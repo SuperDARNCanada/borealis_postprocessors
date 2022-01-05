@@ -159,12 +159,28 @@ class BaseConvert(object):
 
             # Load file
             group = dd.io.load(file_to_process)
-            records = group.keys()
+            records = sorted(list(group.keys()))
+
+            record_list = []  # List of all 'extra' records to process
+            completed_records = []
 
             # Process each record
-            for record in records:
+            for i, record in enumerate(records):
+
+                # Skip records that have already been processed
+                if record in completed_records:
+                    continue
+
                 record_dict = group[record]
-                beamformed_record = self.process_record(record_dict, self.averaging_method, **kwargs)
+
+                # If processing multiple records at a time, get all the records ready
+                if 'avg_num' in kwargs:
+                    for num in range(1, kwargs['avg_num']):
+                        record_list.append(group[records[i+num]])
+                    completed_records.extend(record_list)       # Record the 'extra' records so we don't process twice
+
+                beamformed_record = self.process_record(record_dict, self.averaging_method, extra_records=record_list,
+                                                        **kwargs)
 
                 # Convert to numpy arrays for saving to file with deepdish
                 formatted_record = convert_to_numpy(beamformed_record)
@@ -176,6 +192,9 @@ class BaseConvert(object):
                 # Copy record to output file
                 cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {record}'
                 sp.call(cmd.split())
+
+                # Add record to list of processed records
+                completed_records.append(record)
 
                 # Remove temporary file
                 os.remove(tempfile)
