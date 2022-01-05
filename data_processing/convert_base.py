@@ -161,7 +161,6 @@ class BaseConvert(object):
             group = dd.io.load(file_to_process)
             records = sorted(list(group.keys()))
 
-            record_list = []  # List of all 'extra' records to process
             completed_records = []
 
             # Process each record
@@ -172,12 +171,17 @@ class BaseConvert(object):
                     continue
 
                 record_dict = group[record]
+                record_list = []  # List of all 'extra' records to process
 
                 # If processing multiple records at a time, get all the records ready
                 if 'avg_num' in kwargs:
                     for num in range(1, kwargs['avg_num']):
-                        record_list.append(group[records[i+num]])
-                    completed_records.extend(record_list)       # Record the 'extra' records so we don't process twice
+                        try:
+                            record_list.append(group[records[i+num]])
+                            completed_records.append(records[i+num])    # Record the 'extra' records so we don't process twice
+                        except IndexError:
+                            # Last record may average less than the specified number of records
+                            break
 
                 beamformed_record = self.process_record(record_dict, self.averaging_method, extra_records=record_list,
                                                         **kwargs)

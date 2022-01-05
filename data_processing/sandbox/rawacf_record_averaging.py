@@ -109,5 +109,9 @@ class AverageMultipleRawacfRecords(BaseConvert):
         record['main_acfs'] = np.array(main_acfs, dtype=np.complex64)
         record['intf_acfs'] = np.array(intf_acfs, dtype=np.complex64)
         record['xcfs'] = np.array(xcfs, dtype=np.complex64)
+        record['int_time'] = int_time
+        record['num_sequences'] = total_sequences
+        record['sqn_timestamps'] = sqn_timestamps
+        record['noise_at_freq'] = noise_at_freq
 
         return record
