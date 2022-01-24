@@ -252,7 +252,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
             # phase offset of first pulse - phase offset of second pulse, for all lag pairs
             # [num_lags]
-            angle_offsets = [(pulse_phase_offsets[lag1_indices[i]] - pulse_phase_offsets[lag2_indices[i]])
+            angle_offsets = [np.radians(pulse_phase_offsets[lag1_indices[i]] - pulse_phase_offsets[lag2_indices[i]])
                              for i in range(len(lag1_indices))]
 
             # [num_lags]
