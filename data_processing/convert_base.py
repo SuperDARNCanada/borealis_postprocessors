@@ -195,7 +195,8 @@ class BaseConvert(object):
         Deletes all temporary files used in the processing chain.
         """
         for filename in self._temp_files:
-            os.remove(filename)
+            if os.path.exists(filename):
+                os.remove(filename)
 
     @staticmethod
     def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
