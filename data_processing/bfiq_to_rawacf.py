@@ -148,15 +148,18 @@ class ProcessBfiq2Rawacf(BaseConvert):
             main_corrs_unavg[sequence, ...] = \
                 ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, sequence, :, :],
                                                              bfiq_data[0, sequence, :, :],
-                                                             record)
+                                                             record,
+                                                             sequence)
             intf_corrs_unavg[sequence, ...] = \
                 ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, sequence, :, :],
                                                              bfiq_data[1, sequence, :, :],
-                                                             record)
+                                                             record,
+                                                             sequence)
             cross_corrs_unavg[sequence, ...] = \
                 ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, sequence, :, :],
                                                              bfiq_data[0, sequence, :, :],
-                                                             record)
+                                                             record,
+                                                             sequence)
 
         if averaging_method == 'median':
             main_corrs = xp.median(xp.real(main_corrs_unavg), axis=0) + 1j * xp.median(xp.imag(main_corrs_unavg),
@@ -179,7 +182,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
     @staticmethod
     def correlations_from_samples(beamformed_samples_1: np.array, beamformed_samples_2: np.array,
-                                  record: OrderedDict) -> np.array:
+                                  record: OrderedDict, sequence_num: int) -> np.array:
         """
         Correlate two sets of beamformed samples together. Correlation matrices are used and
         indices corresponding to lag pulse pairs are extracted.
@@ -214,6 +217,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
         pulses = list(record['pulses'])
         pulse_phase_offsets = record['pulse_phase_offset']
+        if len(pulse_phase_offsets) != 0:
+            pulse_phase_offsets = pulse_phase_offsets[sequence_num].reshape((len(record['pulses']),))
 
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
