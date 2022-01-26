@@ -156,8 +156,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
                                                              record,
                                                              sequence)
             cross_corrs_unavg[sequence, ...] = \
-                ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, sequence, :, :],
-                                                             bfiq_data[1, sequence, :, :],
+                ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, sequence, :, :],
+                                                             bfiq_data[0, sequence, :, :],
                                                              record,
                                                              sequence)
 
@@ -207,8 +207,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
         # beamformed_samples_1: [num_beams, num_samples]
         # beamformed_samples_2: [num_beams, num_samples]
         # correlated:           [num_beams, num_samples, num_samples]
-        correlated = xp.einsum('jk,jl->jlk', beamformed_samples_1.conj(),
-                               beamformed_samples_2)
+        correlated = xp.einsum('jk,jl->jkl', beamformed_samples_1, beamformed_samples_2.conj())
 
         if cupy_available:
             correlated = xp.asnumpy(correlated)
