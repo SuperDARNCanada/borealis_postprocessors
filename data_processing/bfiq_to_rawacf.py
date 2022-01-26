@@ -195,6 +195,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
             The second beamformed samples.
         record: OrderedDict
             hdf5 record containing bfiq data and metadata
+        sequence_num: int
+            Index of sequence in record. For grabbing pulse_phase_offset
 
         Returns
         -------
