@@ -38,13 +38,13 @@ def conversion_parser():
     parser.add_argument("outfile",
                         help="Path to the location where the output file should be stored. "
                              "(e.g. 20190327.2210.38.sas.0.rawacf.hdf5.site)")
-    parser.add_argument("infile-type", choices=['antennas_iq', 'bfiq', 'rawacf'],
+    parser.add_argument("infile_type", metavar="infile-type", choices=['antennas_iq', 'bfiq', 'rawacf'],
                         help="Type of input file.")
-    parser.add_argument("outfile-type", choices=['antennas_iq', 'bfiq', 'rawacf'],
+    parser.add_argument("outfile_type", metavar="outfile-type", choices=['antennas_iq', 'bfiq', 'rawacf'],
                         help="Type of output file.")
-    parser.add_argument("infile-structure", choices=['array', 'site'],
+    parser.add_argument("infile_structure", metavar="infile-structure", choices=['array', 'site'],
                         help="Structure of input file.")
-    parser.add_argument("outfile-structure", choices=['array', 'site', 'iqdat', 'dmap'],
+    parser.add_argument("outfile_structure", metavar="outfile-structure", choices=['array', 'site', 'iqdat', 'dmap'],
                         help="Structure of output file.")
     parser.add_argument("-a", "--averaging-method", required=False, default='mean', choices=['mean', 'median'],
                         help="Averaging method for generating rawacf type file. Default mean.")
