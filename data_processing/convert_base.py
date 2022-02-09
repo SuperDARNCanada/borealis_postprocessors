@@ -164,10 +164,10 @@ class BaseConvert(object):
             # Process each record
             for record in records:
                 record_dict = group[record]
-                beamformed_record = self.process_record(record_dict, self.averaging_method, **kwargs)
+                processed_record = self.process_record(record_dict, self.averaging_method, **kwargs)
 
                 # Convert to numpy arrays for saving to file with deepdish
-                formatted_record = convert_to_numpy(beamformed_record)
+                formatted_record = convert_to_numpy(processed_record)
 
                 # Save record to temporary file
                 tempfile = f'/tmp/{record}.tmp'
