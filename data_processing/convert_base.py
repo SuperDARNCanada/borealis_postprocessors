@@ -6,9 +6,11 @@ to bfiq files.
 """
 import os
 import subprocess as sp
+import sys
 from collections import OrderedDict
 from typing import Union
 import deepdish as dd
+import h5py
 
 from data_processing.utils.restructure import restructure, convert_to_numpy, FILE_STRUCTURE_MAPPING
 from exceptions import conversion_exceptions
@@ -157,28 +159,29 @@ class BaseConvert(object):
 
             postprocessing_logger.info(f'Converting file {file_to_process} --> {processed_file}')
 
-            # Load file
-            group = dd.io.load(file_to_process)
-            records = group.keys()
+            with h5py.File(file_to_process, 'r') as f:
+                # Gets the keys without loading the whole file into memory
+                records = f.keys()
 
-            # Process each record
-            for record in records:
-                record_dict = group[record]
-                processed_record = self.process_record(record_dict, self.averaging_method, **kwargs)
+                # Process each record
+                for record in records:
+                    # Load the record into memory
+                    record_dict = dd.io.load(file_to_process, f'/{record}')
+                    processed_record = self.process_record(record_dict, self.averaging_method, **kwargs)
 
-                # Convert to numpy arrays for saving to file with deepdish
-                formatted_record = convert_to_numpy(processed_record)
+                    # Convert to numpy arrays for saving to file with deepdish
+                    formatted_record = convert_to_numpy(processed_record)
 
-                # Save record to temporary file
-                tempfile = f'/tmp/{record}.tmp'
-                dd.io.save(tempfile, formatted_record, compression=None)
+                    # Save record to temporary file
+                    tempfile = f'/tmp/{record}.tmp'
+                    dd.io.save(tempfile, formatted_record, compression=None)
 
-                # Copy record to output file
-                cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {record}'
-                sp.call(cmd.split())
+                    # Copy record to output file
+                    cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {record}'
+                    sp.call(cmd.split())
 
-                # Remove temporary file
-                os.remove(tempfile)
+                    # Remove temporary file
+                    os.remove(tempfile)
 
             # Restructure to final structure format, if necessary
             if self.outfile_structure != 'site':
