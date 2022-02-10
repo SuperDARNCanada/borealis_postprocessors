@@ -189,8 +189,8 @@ def multiprocessing_conversion(arguments):
     import multiprocessing as mp
 
     # Todo: Use less than all the cores or give user options
-    pool = mp.Pool(mp.cpu_count())
-    pool.map(ConvertFile, arguments)
+    pool = mp.Pool(mp.cpu_count()-2)
+    pool.starmap(ConvertFile, arguments)
 
     return
 
