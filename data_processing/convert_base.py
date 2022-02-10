@@ -6,7 +6,6 @@ to bfiq files.
 """
 import os
 import subprocess as sp
-import sys
 from collections import OrderedDict
 from typing import Union
 import deepdish as dd
