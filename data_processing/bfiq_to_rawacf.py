@@ -219,8 +219,9 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
         pulses = list(record['pulses'])
         pulse_phase_offsets = record['pulse_phase_offset']
-        if len(pulse_phase_offsets) != 0:
-            pulse_phase_offsets = pulse_phase_offsets[sequence_num].reshape((len(record['pulses']),))
+        if len(pulse_phase_offsets) != len(record['pulses']):
+            if len(pulse_phase_offsets) != 0:
+                pulse_phase_offsets = pulse_phase_offsets[sequence_num].reshape((len(record['pulses']),))
 
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
@@ -254,7 +255,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
             # phase offset of first pulse - phase offset of second pulse, for all lag pairs
             # [num_lags]
-            angle_offsets = [np.radians(pulse_phase_offsets[lag1_indices[i]] - pulse_phase_offsets[lag2_indices[i]])
+            angle_offsets = [np.radians(np.float64(pulse_phase_offsets[lag1_indices[i]]) - np.float64(pulse_phase_offsets[lag2_indices[i]]))
                              for i in range(len(lag1_indices))]
 
             # [num_lags]

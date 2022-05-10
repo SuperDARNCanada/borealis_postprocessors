@@ -128,10 +128,15 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         main_beamformed_data = xp.array([], dtype=xp.complex64)
         intf_beamformed_data = xp.array([], dtype=xp.complex64)
         main_antenna_count = record['main_antenna_count']
+        intf_antenna_count = record['intf_antenna_count']
 
         station = record['station']
         main_antenna_spacing = radar_dict[station]['main_antenna_spacing']
         intf_antenna_spacing = radar_dict[station]['intf_antenna_spacing']
+
+        antenna_indices = np.array([int(i.split('_')[-1]) for i in record['antenna_arrays_order']])
+        main_antenna_indices = np.array([i for i in antenna_indices if i < main_antenna_count])
+        intf_antenna_indices = np.array([i - main_antenna_count for i in antenna_indices if i >= main_antenna_count])
 
         # Loop through every sequence and beamform the data.
         # Output shape after loop is [num_sequences, num_beams, num_samps]
@@ -140,23 +145,28 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
             # data return shape = [num_beams, num_samps]
             main_beamformed_data = \
                 xp.append(main_beamformed_data,
-                          ProcessAntennasIQ2Bfiq.beamform(antennas_data[:main_antenna_count, sequence, :],
+                          ProcessAntennasIQ2Bfiq.beamform(antennas_data[:len(main_antenna_indices), sequence, :],
                                                           beam_azms,
                                                           freq,
-                                                          main_antenna_spacing))
+                                                          main_antenna_count,
+                                                          main_antenna_spacing,
+                                                          main_antenna_indices))
             intf_beamformed_data = \
                 xp.append(intf_beamformed_data,
-                          ProcessAntennasIQ2Bfiq.beamform(antennas_data[main_antenna_count:, sequence, :],
+                          ProcessAntennasIQ2Bfiq.beamform(antennas_data[len(main_antenna_indices):, sequence, :],
                                                           beam_azms,
                                                           freq,
-                                                          intf_antenna_spacing))
+                                                          intf_antenna_count,
+                                                          intf_antenna_spacing,
+                                                          intf_antenna_indices))
 
         all_data = xp.append(main_beamformed_data, intf_beamformed_data).flatten()
 
         return all_data
 
     @staticmethod
-    def beamform(antennas_data: np.array, beamdirs: np.array, rxfreq: float, antenna_spacing: float) -> np.array:
+    def beamform(antennas_data: np.array, beamdirs: np.array, rxfreq: float, ants_in_array: int, antenna_spacing: float,
+                 antenna_indices: np.array) -> np.array:
         """
         Beamforms the data from each antenna and sums to create one dataset for each beam direction.
 
@@ -169,8 +179,12 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
             Azimuthal beam directions in degrees off boresight
         rxfreq: float
             Frequency of the received beam
+        ants_in_array: int
+            Number of physical antennas in the array
         antenna_spacing: float
             Spacing in metres between antennas (assumed uniform)
+        antenna_indices: np.array
+            Mapping of antenna channels to physical antennas in the uniformly spaced array.
 
         Returns
         -------
@@ -187,14 +201,13 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
             antenna_phase_shifts = []
 
             # Get phase shift for each antenna
-            for antenna in range(num_antennas):
+            for antenna in antenna_indices:
                 phase_shift = ProcessAntennasIQ2Bfiq.get_phshift(beam_direction,
                                                                  rxfreq,
                                                                  antenna,
-                                                                 num_antennas,
+                                                                 ants_in_array,
                                                                  antenna_spacing)
                 # Bring into range (-2*pi, 2*pi)
-                phase_shift = xp.fmod(phase_shift, 2 * xp.pi)
                 antenna_phase_shifts.append(phase_shift)
 
             # Apply phase shift to data from respective antenna
