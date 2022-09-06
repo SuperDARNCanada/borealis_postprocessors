@@ -69,8 +69,8 @@ class ProcessWidebeamAntennasIQ2Bfiq(BaseConvert):
         if beam_azms is None:
             # Add extra phases here
             # STD_16_BEAM_ANGLE from superdarn_common_fields
-            self.beam_azms = [-26.25, -22.75, -19.25, -15.75, -12.25, -8.75, -5.25, -1.75,
-                              1.75, 5.25, 8.75, 12.25, 15.75, 19.25, 22.75, 26.25]
+            self.beam_azms = [-24.3, -21.06, -17.82, -14.58, -11.34, -8.1, -4.86, -1.62, 1.62, 4.86, 8.1, 11.34, 14.58,
+                              17.82, 21.06, 24.3]
 
             # STD_16_FORWARD_BEAM_ORDER
             self.beam_nums = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
