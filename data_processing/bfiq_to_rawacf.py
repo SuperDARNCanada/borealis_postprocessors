@@ -183,6 +183,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
         # correlated:           [num_sequences, num_beams, num_samples, num_samples]
         correlated = np.einsum('ijk,ijl->ijkl', beamformed_samples_1, beamformed_samples_2.conj())
 
+
         values = []
         if record['lags'].size == 0:
             values.append(np.array([]))
