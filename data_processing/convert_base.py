@@ -158,18 +158,38 @@ class BaseConvert(object):
 
             postprocessing_logger.info(f'Converting file {file_to_process} --> {processed_file}')
 
+            # Load file
             with h5py.File(file_to_process, 'r') as f:
-                # Gets the keys without loading the whole file into memory
                 records = f.keys()
+                records = sorted(list(records))
+
+                completed_records = []
 
                 # Process each record
-                for record in records:
-                    # Load the record into memory
+                for i, record in enumerate(records):
+
+                    # Skip records that have already been processed
+                    if record in completed_records:
+                        continue
+
                     record_dict = dd.io.load(file_to_process, f'/{record}')
-                    processed_record = self.process_record(record_dict, self.averaging_method, **kwargs)
+                    record_list = []  # List of all 'extra' records to process
+
+                    # If processing multiple records at a time, get all the records ready
+                    if 'avg_num' in kwargs:
+                        for num in range(1, kwargs['avg_num']):
+                            try:
+                                record_list.append(dd.io.load(file_to_process, f'/{records[i+num]}'))
+                                completed_records.append(records[i+num])    # Record the 'extra' records so we don't process twice
+                            except IndexError:
+                                # Last record may average less than the specified number of records
+                                break
+
+                    beamformed_record = self.process_record(record_dict, self.averaging_method, extra_records=record_list,
+                                                            **kwargs)
 
                     # Convert to numpy arrays for saving to file with deepdish
-                    formatted_record = convert_to_numpy(processed_record)
+                    formatted_record = convert_to_numpy(beamformed_record)
 
                     # Save record to temporary file
                     tempfile = f'/tmp/{record}.tmp'
@@ -179,6 +199,9 @@ class BaseConvert(object):
                     cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {record}'
                     sp.call(cmd.split())
 
+                    # Add record to list of processed records
+                    completed_records.append(record)
+
                     # Remove temporary file
                     os.remove(tempfile)
 
@@ -186,9 +209,10 @@ class BaseConvert(object):
             if self.outfile_structure != 'site':
                 postprocessing_logger.info(f'Restructuring file {processed_file} --> {self.outfile}')
                 restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure)
-        except (Exception,):
+        except (Exception,) as e:
             postprocessing_logger.error(f'Could not process file {self.infile} -> {self.outfile}. Removing all newly'
                                         f' generated files.')
+            postprocessing_logger.error(e)
         finally:
             self._remove_temp_files()
 
