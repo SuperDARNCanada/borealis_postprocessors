@@ -135,31 +135,15 @@ class ProcessBfiq2Rawacf(BaseConvert):
         num_arrays, num_sequences, num_beams, num_samps = record['data_dimensions']
         bfiq_data = bfiq_data.reshape(record['data_dimensions'])
 
-        num_lags = len(record['lags'])
-        main_corrs_unavg = xp.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=xp.complex64)
-        intf_corrs_unavg = xp.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=xp.complex64)
-        cross_corrs_unavg = xp.zeros((num_sequences, num_beams, record['num_ranges'], num_lags), dtype=xp.complex64)
-
-        # Loop through every sequence and compute correlations.
-        # Output shape after loop is [num_sequences, num_beams, num_range_gates, num_lags]
-        for sequence in range(num_sequences):
-            # data input shape  = [num_antenna_arrays, num_beams, num_samps]
-            # data return shape = [num_beams, num_range_gates, num_lags]
-            main_corrs_unavg[sequence, ...] = \
-                ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, sequence, :, :],
-                                                             bfiq_data[0, sequence, :, :],
-                                                             record,
-                                                             sequence)
-            intf_corrs_unavg[sequence, ...] = \
-                ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, sequence, :, :],
-                                                             bfiq_data[1, sequence, :, :],
-                                                             record,
-                                                             sequence)
-            cross_corrs_unavg[sequence, ...] = \
-                ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, sequence, :, :],
-                                                             bfiq_data[0, sequence, :, :],
-                                                             record,
-                                                             sequence)
+        main_corrs_unavg = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, ...],
+                                                                        bfiq_data[0, ...],
+                                                                        record)
+        intf_corrs_unavg = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, ...],
+                                                                        bfiq_data[1, ...],
+                                                                        record)
+        cross_corrs_unavg = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, ...],
+                                                                         bfiq_data[0, ...],
+                                                                         record)
 
         if averaging_method == 'median':
             main_corrs = xp.median(xp.real(main_corrs_unavg), axis=0) + 1j * xp.median(xp.imag(main_corrs_unavg),
@@ -182,32 +166,30 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
     @staticmethod
     def correlations_from_samples(beamformed_samples_1: np.array, beamformed_samples_2: np.array,
-                                  record: OrderedDict, sequence_num: int) -> np.array:
+                                  record: OrderedDict) -> np.array:
         """
         Correlate two sets of beamformed samples together. Correlation matrices are used and
         indices corresponding to lag pulse pairs are extracted.
 
         Parameters
         ----------
-        beamformed_samples_1: ndarray [num_slices, num_beams, num_samples]
+        beamformed_samples_1: ndarray [num_sequences, num_beams, num_samples]
             The first beamformed samples.
-        beamformed_samples_2: ndarray [num_slices, num_beams, num_samples]
+        beamformed_samples_2: ndarray [num_sequences, num_beams, num_samples]
             The second beamformed samples.
         record: OrderedDict
             hdf5 record containing bfiq data and metadata
-        sequence_num: int
-            Index of sequence in record. For grabbing pulse_phase_offset
 
         Returns
         -------
-        values: np.array
-            Array of correlations for each beam, range, and lag
+        values: np.array [num_sequences, num_beams, num_ranges, num_lags]
+            Array of correlations for each sequence, beam, range, and lag
         """
 
-        # beamformed_samples_1: [num_beams, num_samples]
-        # beamformed_samples_2: [num_beams, num_samples]
-        # correlated:           [num_beams, num_samples, num_samples]
-        correlated = xp.einsum('jk,jl->jkl', beamformed_samples_1, beamformed_samples_2.conj())
+        # beamformed_samples_1: [num_sequences, num_beams, num_samples]
+        # beamformed_samples_2: [num_sequences, num_beams, num_samples]
+        # correlated:           [num_sequences, num_beams, num_samples, num_samples]
+        correlated = xp.einsum('ijk,ijl->ijkl', beamformed_samples_1, beamformed_samples_2.conj())
 
         if cupy_available:
             correlated = xp.asnumpy(correlated)
@@ -217,11 +199,12 @@ class ProcessBfiq2Rawacf(BaseConvert):
             values.append(xp.array([]))
             return values
 
+        num_sequences = beamformed_samples_1.shape[0]
         pulses = list(record['pulses'])
         pulse_phase_offsets = record['pulse_phase_offset']
         if len(pulse_phase_offsets) != len(record['pulses']):
             if len(pulse_phase_offsets) != 0:
-                pulse_phase_offsets = pulse_phase_offsets[sequence_num].reshape((len(record['pulses']),))
+                pulse_phase_offsets = pulse_phase_offsets.reshape((num_sequences, len(record['pulses'])))
 
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
@@ -243,8 +226,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
         # [num_range_gates, num_lags, 2]
         column = samples_for_all_range_lags[..., 0].astype(xp.int32)
 
-        # [num_beams, num_range_gates, num_lags]
-        values = correlated[:, row, column]
+        # [num_sequences, num_beams, num_range_gates, num_lags]
+        values = correlated[..., row, column]
 
         # Remove pulse_phase_offsets if they are present
         if len(pulse_phase_offsets) == len(pulses):
@@ -255,13 +238,14 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
             # phase offset of first pulse - phase offset of second pulse, for all lag pairs
             # [num_lags]
-            angle_offsets = [np.radians(np.float64(pulse_phase_offsets[lag1_indices[i]]) - np.float64(pulse_phase_offsets[lag2_indices[i]]))
+            angle_offsets = [np.radians(np.float32(pulse_phase_offsets[lag1_indices[i]]) -
+                                        np.float32(pulse_phase_offsets[lag2_indices[i]]))
                              for i in range(len(lag1_indices))]
 
             # [num_lags]
-            phase_offsets = xp.exp(1j * np.array(angle_offsets, np.float64))
+            phase_offsets = xp.exp(1j * np.array(angle_offsets, np.float32))
 
-            values = xp.einsum('ijk,k->ijk', values, phase_offsets)
+            values = xp.einsum('ijkl,l->ijkl', values, phase_offsets)
         elif len(pulse_phase_offsets) != 0:
             raise ValueError('Dimensions of pulse_phase_offsets does not match dimensions of pulses')
 
@@ -270,7 +254,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
         # Replace all ranges which are contaminated by the second pulse for lag 0
         # with the data from those ranges after the final pulse.
-        values[:, second_pulse_sample_num:, 0] = values[:, second_pulse_sample_num:, -1]
+        values[..., second_pulse_sample_num:, 0] = values[..., second_pulse_sample_num:, -1]
 
         return values
 
