@@ -82,14 +82,12 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
             elif experiment_name == 'BistaticTest':
                 if 'Bistatic widebeam mode' in experiment_comment:
                     print(f'{path} - Bistatic listening experiment, cannot process.  ', end='')
-                    continue
                 else:
                     # Convert straight to SuperDARN-formatted rawacf file
                     print(f'{path} -> {sdarn_file}  ', end='')
                     ConvertFile(path, sdarn_path, 'antennas_iq', 'rawacf', input_structure, 'dmap', averaging_method)
             else:
                 print(f'{path} - Not a widebeam experiment.  ', end='')
-                continue
 
         end = datetime.utcnow()
         duration = (end - start).total_seconds()
