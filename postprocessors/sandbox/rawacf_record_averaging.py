@@ -7,7 +7,7 @@ from collections import OrderedDict
 from typing import Union
 import numpy as np
 
-from data_processing.convert_base import BaseConvert
+from postprocessors import BaseConvert
 
 
 class AverageMultipleRawacfRecords(BaseConvert):

@@ -11,8 +11,8 @@ from typing import Union
 import deepdish as dd
 import h5py
 
-from data_processing.utils.restructure import restructure, convert_to_numpy, FILE_STRUCTURE_MAPPING
-from exceptions import conversion_exceptions
+from postprocessors.core.restructure import restructure, convert_to_numpy, FILE_STRUCTURE_MAPPING
+from postprocessors import conversion_exceptions
 
 try:
     import cupy as xp

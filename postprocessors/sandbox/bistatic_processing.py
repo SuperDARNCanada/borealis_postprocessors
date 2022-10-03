@@ -8,8 +8,7 @@ from typing import Union
 import numpy as np
 import deepdish as dd
 
-from data_processing.convert_base import BaseConvert
-from data_processing.antennas_iq_to_rawacf import ProcessAntennasIQ2Rawacf
+from postprocessors import BaseConvert, ProcessAntennasIQ2Rawacf
 
 
 class BistaticProcessing(BaseConvert):

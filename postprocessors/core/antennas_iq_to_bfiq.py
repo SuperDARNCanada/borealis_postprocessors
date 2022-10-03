@@ -11,7 +11,7 @@ from typing import Union
 import numpy as np
 from scipy.constants import speed_of_light
 
-from data_processing.convert_base import BaseConvert
+from postprocessors import BaseConvert
 
 try:
     import cupy as xp

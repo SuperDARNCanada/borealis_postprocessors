@@ -5,9 +5,7 @@ import h5py
 import deepdish as dd
 from datetime import datetime
 
-from conversion import ConvertFile
-from data_processing.utils.filename_conversions import borealis_to_sdarn_rename, borealis_to_borealis_rename
-from data_processing.sandbox.widebeam_antennas_iq_to_bfiq import ProcessWidebeamAntennasIQ2Bfiq
+from postprocessors import ConvertFile, borealis_to_sdarn_rename, borealis_to_borealis_rename
 
 
 def main(in_directory: str, out_directory: str, search_pattern: str):

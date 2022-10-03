@@ -9,7 +9,7 @@ import numpy as np
 from collections import OrderedDict
 from typing import Union
 
-from data_processing.convert_base import BaseConvert
+from postprocessors import BaseConvert
 
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 

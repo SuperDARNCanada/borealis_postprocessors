@@ -8,12 +8,9 @@ SuperDARN data files.
 import argparse
 import os
 
-from data_processing.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
-from data_processing.antennas_iq_to_rawacf import ProcessAntennasIQ2Rawacf
-from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
-from data_processing.convert_base import BaseConvert
-from data_processing.utils.restructure import FILE_TYPE_MAPPING, restructure
-from exceptions import conversion_exceptions
+from postprocessors import ProcessAntennasIQ2Bfiq, ProcessBfiq2Rawacf, ProcessAntennasIQ2Rawacf, BaseConvert
+from postprocessors.core.restructure import FILE_TYPE_MAPPING, restructure
+from postprocessors import conversion_exceptions
 
 
 def usage_msg():
