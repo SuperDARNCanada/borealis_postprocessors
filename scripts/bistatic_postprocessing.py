@@ -6,6 +6,7 @@ import deepdish as dd
 from datetime import datetime
 
 from postprocessors import ConvertFile, borealis_to_sdarn_rename, borealis_to_borealis_rename
+from postprocessors.sandbox.widebeam_antennas_iq_to_bfiq import ProcessWidebeamAntennasIQ2Bfiq
 
 
 def main(in_directory: str, out_directory: str, search_pattern: str):
@@ -63,7 +64,7 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
             if input_structure == 'site':
                 with h5py.File(path, 'r') as f:
                     records = sorted(list(f.keys()))
-                first_record = dd.io.load(f'/{records[0]}')
+                first_record = dd.io.load(path, f'/{records[0]}')
                 experiment_name = first_record['experiment_name']
                 experiment_comment = first_record['experiment_comment']
             else:
