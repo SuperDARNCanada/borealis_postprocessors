@@ -48,17 +48,21 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
 
         start = datetime.utcnow()
 
-        if os.path.isfile(sdarn_path):      # Already processed this file
-            print(f'{path} - Already done. ', end='')
-        elif os.path.isfile(rawacf_path):   # Just need to convert to SuperDARN format
-            print(f'{path} - Converting {rawacf_file} to SuperDARN format. ', end='')
-            ConvertFile(rawacf_path, sdarn_path, "rawacf", 'rawacf', 'site', 'dmap')
+        if os.path.isfile(rawacf_path):   # Just need to convert to SuperDARN format
+            if os.path.isfile(sdarn_path):  # Already processed this file
+                print(f'{path} - Already done. ', end='')
+            else:
+                print(f'{path} - Converting {rawacf_file} to SuperDARN format. ', end='')
+                ConvertFile(rawacf_path, sdarn_path, "rawacf", 'rawacf', 'site', 'dmap')
+
         elif os.path.isfile(bfiq_path):
             # bfiq already exists
-            print(f'{bfiq_path} -> {sdarn_file}  ', end='')
+            print(f'{bfiq_path} -> {rawacf_file}  ', end='')
             ConvertFile(bfiq_path, rawacf_path, 'bfiq', 'rawacf', 'site', 'site', averaging_method)
-            ConvertFile(rawacf_path, sdarn_path, 'rawacf', 'rawacf', 'site', 'dmap', averaging_method)
+            if not os.path.isfile(sdarn_path):
+                ConvertFile(rawacf_path, sdarn_path, 'rawacf', 'rawacf', 'site', 'dmap', averaging_method)
             os.remove(bfiq_path)       # Don't want to keep this around
+
         else:
             # Figure out how to process the file. Some experiments are straightforward, some need some love
             if input_structure == 'site':
@@ -77,7 +81,8 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
                 print(f'{path} -> {sdarn_file}  ', end='')
                 ProcessWidebeamAntennasIQ2Bfiq(path, bfiq_path, input_structure, 'site')
                 ConvertFile(bfiq_path, rawacf_path, 'bfiq', 'rawacf', 'site', 'site', averaging_method)
-                ConvertFile(rawacf_path, sdarn_path, 'rawacf', 'rawacf', 'site', 'dmap', averaging_method)
+                if not os.path.isfile(sdarn_path):
+                    ConvertFile(rawacf_path, sdarn_path, 'rawacf', 'rawacf', 'site', 'dmap', averaging_method)
                 os.remove(bfiq_path)    # We don't need to keep these around
 
             elif experiment_name == 'BistaticTest':
@@ -87,7 +92,8 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
                     # Convert to SuperDARN-formatted rawacf file
                     print(f'{path} -> {sdarn_file}  ', end='')
                     ConvertFile(path, rawacf_path, 'antennas_iq', 'rawacf', input_structure, 'site', averaging_method)
-                    ConvertFile(rawacf_path, sdarn_path, 'rawacf', 'rawacf', 'site', 'dmap', averaging_method)
+                    if not os.path.isfile(sdarn_path):  # Already processed this file
+                        ConvertFile(rawacf_path, sdarn_path, 'rawacf', 'rawacf', 'site', 'dmap', averaging_method)
             else:
                 print(f'{path} - Not a widebeam experiment.  ', end='')
 
