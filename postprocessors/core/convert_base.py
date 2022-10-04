@@ -10,6 +10,7 @@ from collections import OrderedDict
 from typing import Union
 import deepdish as dd
 import h5py
+from functools import partial
 from multiprocessing import Pool
 
 from postprocessors.core.restructure import restructure, convert_to_numpy, FILE_STRUCTURE_MAPPING
@@ -26,6 +27,48 @@ else:
 import logging
 
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
+
+
+def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, averaging_method: str,
+                       processing_fn, **kwargs):
+    """
+    Helper function for processing a single record. It is defined here to facilitate multiprocessing.
+
+    Parameters
+    ----------
+    idx: int
+        Index into record_keys which tells processing_machine() which record to process
+    filename: str
+        Name of the HDF5 file with records to process.
+    record_keys: list
+        List of all top-level keys of the HDF5 file.
+    records_per_process: int
+        Number of records to process per call to this function.
+    averaging_method: str
+        Method for averaging rawacf data. Either 'mean' or 'median'
+    processing_fn: callable
+        Function to call to process a record.
+    kwargs: dict
+        Key-word arguments to pass to processing_fn
+
+    Returns
+    -------
+    formatted_record, idx: properly-formatted processed record and the index which was processed.
+    """
+
+    record_dict = dd.io.load(filename, f'/{record_keys[idx]}')
+    record_list = []  # List of all 'extra' records to process
+
+    # If processing multiple records at a time, get all the records ready
+    if records_per_process > 1:
+        for num in range(idx, min(idx + records_per_process, len(record_keys))):
+            record_list.append(dd.io.load(filename, f'/{record_keys[idx + num]}'))
+
+    processed_record = processing_fn(record_dict, averaging_method, extra_records=record_list, **kwargs)
+
+    # Convert to numpy arrays for saving to file with deepdish
+    formatted_record = convert_to_numpy(processed_record)
+    return formatted_record, idx
 
 
 class BaseConvert(object):
@@ -170,29 +213,15 @@ class BaseConvert(object):
 
                 indices = range(0, len(records), records_per_process)
 
-                def processing_machine(idx: int):
-                    """Helper function for multiprocessing"""
-                    record_dict = dd.io.load(file_to_process, f'/{records[idx]}')
-                    record_list = []  # List of all 'extra' records to process
-
-                    # If processing multiple records at a time, get all the records ready
-                    if records_per_process > 1:
-                        for num in range(1, records_per_process):
-                            try:
-                                record_list.append(dd.io.load(file_to_process, f'/{records[idx+num]}'))
-                            except IndexError:
-                                # Last record may average less than the specified number of records
-                                break
-
-                    processed_record = self.process_record(record_dict, self.averaging_method,
-                                                           extra_records=record_list, **kwargs)
-
-                    # Convert to numpy arrays for saving to file with deepdish
-                    formatted_record = convert_to_numpy(processed_record)
-                    return formatted_record, idx
-
                 with Pool(kwargs.get('num_processes', 5)) as p:
-                    for completed_record, i in p.map(processing_machine, indices):
+
+                    function_to_call = partial(processing_machine,
+                                               filename=file_to_process, record_keys=records,
+                                               records_per_process=records_per_process,
+                                               averaging_method=self.averaging_method,
+                                               processing_fn=self.process_record, **kwargs)
+
+                    for completed_record, i in p.map(function_to_call, indices):
 
                         # Save record to temporary file
                         tempfile = f'/tmp/{records[i]}.tmp'
