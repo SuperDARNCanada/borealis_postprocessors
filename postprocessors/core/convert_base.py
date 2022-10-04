@@ -10,6 +10,7 @@ from collections import OrderedDict
 from typing import Union
 import deepdish as dd
 import h5py
+from multiprocessing import Pool
 
 from postprocessors.core.restructure import restructure, convert_to_numpy, FILE_STRUCTURE_MAPPING
 from postprocessors import conversion_exceptions
@@ -163,47 +164,46 @@ class BaseConvert(object):
                 records = f.keys()
                 records = sorted(list(records))
 
-                completed_records = []
+                records_per_process = 1
+                if 'avg_num' in kwargs:
+                    records_per_process = kwargs['avg_num']     # Records are getting averaged together.
 
-                # Process each record
-                for i, record in enumerate(records):
+                indices = range(0, len(records), records_per_process)
 
-                    # Skip records that have already been processed
-                    if record in completed_records:
-                        continue
-
-                    record_dict = dd.io.load(file_to_process, f'/{record}')
+                def processing_machine(idx: int):
+                    """Helper function for multiprocessing"""
+                    record_dict = dd.io.load(file_to_process, f'/{records[idx]}')
                     record_list = []  # List of all 'extra' records to process
 
                     # If processing multiple records at a time, get all the records ready
-                    if 'avg_num' in kwargs:
-                        for num in range(1, kwargs['avg_num']):
+                    if records_per_process > 1:
+                        for num in range(1, records_per_process):
                             try:
-                                record_list.append(dd.io.load(file_to_process, f'/{records[i+num]}'))
-                                completed_records.append(records[i+num])    # Record the 'extra' records so we don't process twice
+                                record_list.append(dd.io.load(file_to_process, f'/{records[idx+num]}'))
                             except IndexError:
                                 # Last record may average less than the specified number of records
                                 break
 
-                    beamformed_record = self.process_record(record_dict, self.averaging_method, extra_records=record_list,
-                                                            **kwargs)
+                    processed_record = self.process_record(record_dict, self.averaging_method,
+                                                           extra_records=record_list, **kwargs)
 
                     # Convert to numpy arrays for saving to file with deepdish
-                    formatted_record = convert_to_numpy(beamformed_record)
+                    formatted_record = convert_to_numpy(processed_record)
+                    return formatted_record, idx
 
-                    # Save record to temporary file
-                    tempfile = f'/tmp/{record}.tmp'
-                    dd.io.save(tempfile, formatted_record, compression=None)
+                with Pool(kwargs.get('num_processes', 5)) as p:
+                    for completed_record, i in p.map(processing_machine, indices):
 
-                    # Copy record to output file
-                    cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {record}'
-                    sp.call(cmd.split())
+                        # Save record to temporary file
+                        tempfile = f'/tmp/{records[i]}.tmp'
+                        dd.io.save(tempfile, completed_record, compression=None)
 
-                    # Add record to list of processed records
-                    completed_records.append(record)
+                        # Copy record to output file
+                        cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {records[i]}'
+                        sp.call(cmd.split())
 
-                    # Remove temporary file
-                    os.remove(tempfile)
+                        # Remove temporary file
+                        os.remove(tempfile)
 
             # Restructure to final structure format, if necessary
             if self.outfile_structure != 'site':
