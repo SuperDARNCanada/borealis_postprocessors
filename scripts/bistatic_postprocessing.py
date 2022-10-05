@@ -39,20 +39,22 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
         filename = os.path.basename(path)
 
         bfiq_file = borealis_to_borealis_rename(filename, 'bfiq', 'site')
-        rawacf_file = borealis_to_borealis_rename(filename, 'rawacf', 'site')
+        rawacf_site = borealis_to_borealis_rename(filename, 'rawacf', 'site')
+        rawacf_array = borealis_to_borealis_rename(filename, 'rawacf', 'array')
 
         bfiq_path = f'{out_directory}/{bfiq_file}'
-        rawacf_path = f'{out_directory}/{rawacf_file}'
+        rawacf_site_path = f'{out_directory}/{rawacf_site}'
+        rawacf_array_path = f'{out_directory}/{rawacf_array}'
 
         start = datetime.utcnow()
 
-        if os.path.isfile(rawacf_path):   # Just need to convert to SuperDARN format
+        if os.path.isfile(rawacf_site_path) or os.path.isfile(rawacf_array_path):
             print(f'{path} - Already done. ', end='')
 
         elif os.path.isfile(bfiq_path):
             # bfiq already exists
-            print(f'{bfiq_path} -> {rawacf_file}  ', end='')
-            ConvertFile(bfiq_path, rawacf_path, 'bfiq', 'rawacf', 'site', 'site', averaging_method)
+            print(f'{bfiq_path} -> {rawacf_array}  ', end='')
+            ConvertFile(bfiq_path, rawacf_array_path, 'bfiq', 'rawacf', 'site', 'array', averaging_method)
             os.remove(bfiq_path)       # Don't want to keep this around
 
         else:
@@ -70,17 +72,17 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
                     experiment_comment = attributes['experiment_comment']
 
             if experiment_name in ['Widebeam_2tx', 'Widebeam_3tx', 'MultifreqWidebeam']:    # These ones need some love
-                print(f'{path} -> {rawacf_file}  ', end='')
+                print(f'{path} -> {rawacf_array}  ', end='')
                 ProcessWidebeamAntennasIQ2Bfiq(path, bfiq_path, input_structure, 'site')
-                ConvertFile(bfiq_path, rawacf_path, 'bfiq', 'rawacf', 'site', 'site', averaging_method)
+                ConvertFile(bfiq_path, rawacf_array_path, 'bfiq', 'rawacf', 'site', 'array', averaging_method)
                 os.remove(bfiq_path)    # We don't need to keep these around
 
             elif experiment_name == 'BistaticTest':
                 if 'Bistatic widebeam mode' in experiment_comment:
                     print(f'{path} - Bistatic listening experiment, cannot process.  ', end='')
                 else:
-                    print(f'{path} -> {rawacf_file}  ', end='')
-                    ConvertFile(path, rawacf_path, 'antennas_iq', 'rawacf', input_structure, 'site', averaging_method)
+                    print(f'{path} -> {rawacf_array}  ', end='')
+                    ConvertFile(path, rawacf_array_path, 'antennas_iq', 'rawacf', input_structure, 'array', averaging_method)
             else:
                 print(f'{path} - Not a widebeam experiment.  ', end='')
 
