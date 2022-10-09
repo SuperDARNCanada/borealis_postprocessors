@@ -7,6 +7,7 @@ from datetime import datetime
 
 from postprocessors import ConvertFile, borealis_to_borealis_rename
 from postprocessors.sandbox.widebeam_antennas_iq_to_bfiq import ProcessWidebeamAntennasIQ2Bfiq
+from postprocessors.sandbox.bistatic_processing import BistaticProcessing
 
 
 def main(in_directory: str, out_directory: str, search_pattern: str):
@@ -79,7 +80,12 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
 
             elif experiment_name == 'BistaticTest':
                 if 'Bistatic widebeam mode' in experiment_comment:
-                    print(f'{path} - Bistatic listening experiment, cannot process.  ', end='')
+                    # Search for file with timestamps to match against, then process.
+                    fields = filename.split('.')
+                    timestamp_pattern = '.'.join([fields[0], fields[1][0:2], '*timestamps*'])   # YYYYMMDD.HH
+                    timestamp_file = glob.glob(f'{in_directory}/timestamps/{timestamp_pattern}')[0]     # Expect 1 file
+                    print(f'{path} - Bistatic listening experiment, using timestamps from {timestamp_file}.  ', end='')
+                    BistaticProcessing(path, rawacf_array_path, input_structure, 'array', timestamp_file)
                 else:
                     print(f'{path} -> {rawacf_array}  ', end='')
                     ConvertFile(path, rawacf_array_path, 'antennas_iq', 'rawacf', input_structure, 'array', averaging_method)
