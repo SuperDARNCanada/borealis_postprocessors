@@ -93,14 +93,28 @@ class BistaticProcessing(BaseConvert):
         rx_tstamps = np.around(record['sqn_timestamps'], decimals=6)   # Round to nearest microsecond
 
         # Get the tx timestamps that occur during this record
-        tx_indices = list(np.argwhere(rx_tstamps[0] <= tx_timestamps <= rx_tstamps[-1]))
-        tx_times = set(tx_timestamps[tx_indices])
+        tx_start = np.min(np.argwhere(rx_tstamps[0] <= tx_timestamps))
+        tx_end = np.max(np.argwhere(tx_timestamps <= rx_tstamps[-1]))
+        tx_times = tx_timestamps[tx_start:tx_end + 1]      # Only the times that overlap, including the end
 
         # Keep all indices from rx_tstamps that have a corresponding tx timestamp
         keep_indices = []
-        for t in range(len(rx_tstamps)):
-            if rx_tstamps[t] in tx_times:
-                keep_indices.append(t)
+        j = 0
+        for i in range(len(rx_tstamps)):
+            if rx_tstamps[i] == tx_times[j]:    # Both radars synced and operated during this time, add sequence
+                keep_indices.append(i)
+                j += 1
+            elif abs(rx_tstamps[i] - tx_times[j]) < 1e-3:    # Both radars operated, but not synced up, so skip it
+                j += 1
+            elif rx_tstamps[i] < tx_times[j]:   # tx radar missed a sequence, skip this rx sequence
+                pass
+            else:       # rx radar missed a sequence so is ahead, gotta catch tx radar back up
+                while rx_tstamps[i] - tx_times[j] > 1e-3:
+                    j += 1
+                if rx_tstamps[i] == tx_times[j]:
+                    # Still have to check if they are within a microsecond of each other
+                    keep_indices.append(i)
+                    j += 1
 
         # Extract the good data
         data_dimensions = record['data_dimensions']
