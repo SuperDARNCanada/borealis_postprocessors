@@ -80,12 +80,17 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
 
             elif experiment_name == 'BistaticTest':
                 if 'Bistatic widebeam mode' in experiment_comment:
+                    print(f'{path} - Bistatic listening experiment. ', end='')
                     # Search for file with timestamps to match against, then process.
                     fields = filename.split('.')
                     timestamp_pattern = '.'.join([fields[0], fields[1][0:2], '*timestamps*'])   # YYYYMMDD.HH
-                    timestamp_file = glob.glob(f'{in_directory}/timestamps/{timestamp_pattern}')[0]     # Expect 1 file
-                    print(f'{path} - Bistatic listening experiment, using timestamps from {timestamp_file}.  ', end='')
-                    BistaticProcessing(path, rawacf_array_path, input_structure, 'array', timestamp_file)
+                    timestamp_files = glob.glob(f'{in_directory}/timestamps/{timestamp_pattern}')
+                    if len(timestamp_files) == 0:
+                        print('Error - no timestamp file.  ', end='')
+                        continue
+                    else:   # Expect 1 file
+                        print('Using timestamps from {timestamp_files[0]}.  ', end='')
+                        BistaticProcessing(path, rawacf_array_path, input_structure, 'array', timestamp_files[0])
                 else:
                     print(f'{path} -> {rawacf_array}  ', end='')
                     ConvertFile(path, rawacf_array_path, 'antennas_iq', 'rawacf', input_structure, 'array', averaging_method)
