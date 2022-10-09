@@ -66,9 +66,12 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
 
     processed_record = processing_fn(record_dict, averaging_method, extra_records=record_list, **kwargs)
 
-    # Convert to numpy arrays for saving to file with deepdish
-    formatted_record = convert_to_numpy(processed_record)
-    return formatted_record, idx
+    if processed_record is None:
+        return None, idx
+    else:
+        # Convert to numpy arrays for saving to file with deepdish
+        formatted_record = convert_to_numpy(processed_record)
+        return formatted_record, idx
 
 
 class BaseConvert(object):
@@ -222,17 +225,17 @@ class BaseConvert(object):
                                                processing_fn=self.process_record, **kwargs)
 
                     for completed_record, i in p.map(function_to_call, indices):
+                        if completed_record is not None:
+                            # Save record to temporary file
+                            tempfile = f'/tmp/{records[i]}.tmp'
+                            dd.io.save(tempfile, completed_record, compression=None)
 
-                        # Save record to temporary file
-                        tempfile = f'/tmp/{records[i]}.tmp'
-                        dd.io.save(tempfile, completed_record, compression=None)
+                            # Copy record to output file
+                            cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {records[i]}'
+                            sp.call(cmd.split())
 
-                        # Copy record to output file
-                        cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {records[i]}'
-                        sp.call(cmd.split())
-
-                        # Remove temporary file
-                        os.remove(tempfile)
+                            # Remove temporary file
+                            os.remove(tempfile)
 
             # Restructure to final structure format, if necessary
             if self.outfile_structure != 'site':

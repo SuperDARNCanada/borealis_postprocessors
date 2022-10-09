@@ -68,7 +68,7 @@ class BistaticProcessing(BaseConvert):
         self.process_file(timestamps=timestamps)
 
     @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> Union[OrderedDict, None]:
         """
         Takes a record from a Borealis file and only processes the sequences which were transmitted by
         the transmitting radar site.
@@ -93,8 +93,14 @@ class BistaticProcessing(BaseConvert):
         rx_tstamps = np.around(record['sqn_timestamps'], decimals=6)   # Round to nearest microsecond
 
         # Get the tx timestamps that occur during this record
-        tx_start = np.min(np.argwhere(rx_tstamps[0] <= tx_timestamps))
-        tx_end = np.max(np.argwhere(tx_timestamps <= rx_tstamps[-1]))
+        tx_after_start = np.argwhere(rx_tstamps[0] <= tx_timestamps)
+        tx_before_end = np.argwhere(tx_timestamps <= rx_tstamps[-1])
+        if tx_after_start.size == 0 or tx_before_end.size == 0:
+            # No overlap in times, so throw out this record
+            return None
+        else:
+            tx_start = np.min(tx_after_start)
+            tx_end = np.max(tx_before_end)
         tx_times = tx_timestamps[tx_start:tx_end + 1]      # Only the times that overlap, including the end
 
         # Keep all indices from rx_tstamps that have a corresponding tx timestamp
