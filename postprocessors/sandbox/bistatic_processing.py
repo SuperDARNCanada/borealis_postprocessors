@@ -101,6 +101,8 @@ class BistaticProcessing(BaseConvert):
         keep_indices = []
         j = 0
         for i in range(len(rx_tstamps)):
+            if j == tx_times.size:  # No more tx sequences
+                break
             if rx_tstamps[i] == tx_times[j]:    # Both radars synced and operated during this time, add sequence
                 keep_indices.append(i)
                 j += 1
@@ -109,7 +111,7 @@ class BistaticProcessing(BaseConvert):
             elif rx_tstamps[i] < tx_times[j]:   # tx radar missed a sequence, skip this rx sequence
                 pass
             else:       # rx radar missed a sequence so is ahead, gotta catch tx radar back up
-                while rx_tstamps[i] - tx_times[j] > 1e-3:
+                while rx_tstamps[i] - tx_times[j] > 1e-3 and j < tx_times.size - 1:
                     j += 1
                 if rx_tstamps[i] == tx_times[j]:
                     # Still have to check if they are within a microsecond of each other
