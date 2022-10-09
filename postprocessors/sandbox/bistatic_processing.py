@@ -110,7 +110,7 @@ class BistaticProcessing(BaseConvert):
         # Extract the good data
         data_dimensions = record['data_dimensions']
         data = record['data'].reshape(data_dimensions)
-        record['data'] = data[:, keep_indices, :]   # [num_antennas, num_sequences, num_samps]
+        record['data'] = data[:, keep_indices, :].flatten()   # [num_antennas, num_sequences, num_samps]
 
         # Update the metadata
         data_dimensions[1] = np.uint32(len(keep_indices))
