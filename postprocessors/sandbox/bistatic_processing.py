@@ -62,7 +62,7 @@ class BistaticProcessing(BaseConvert):
         timestamps_opened = dd.io.load(timestamps_file)   # Load the whole file in
         keys = sorted(list(timestamps_opened.keys()))
 
-        timestamps = np.concatenate([timestamps_opened[k]['sqn_timestamps'] for k in keys])
+        timestamps = np.concatenate([timestamps_opened[k]['data']['sqn_timestamps'] for k in keys])
         timestamps = np.around(timestamps, decimals=6)      # round to nearest microsecond
 
         self.process_file(timestamps=timestamps)
