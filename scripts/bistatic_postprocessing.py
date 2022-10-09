@@ -10,7 +10,7 @@ from postprocessors.sandbox.widebeam_antennas_iq_to_bfiq import ProcessWidebeamA
 from postprocessors.sandbox.bistatic_processing import BistaticProcessing
 
 
-def main(in_directory: str, out_directory: str, search_pattern: str):
+def main(in_directory: str, out_directory: str, out_struct: str, search_pattern: str, timestamp_dir: str):
     """
     Postprocess all widebeam experiments from in_directory.
 
@@ -20,8 +20,12 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
         Path to directory containing widebeam experiment files.
     out_directory: str
         Path to directory to save post-processed widebeam experiment files.
+    out_struct: str
+        Final structure to save files as. Either 'site', 'array', or 'dmap'
     search_pattern: str
         Pattern to match when finding files
+    timestamp_dir: str
+        Path to directory to search for timestamp files.
 
     Returns
     -------
@@ -39,7 +43,7 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
 
         filename = os.path.basename(path)
 
-        bfiq_file = borealis_to_borealis_rename(filename, 'bfiq', 'site')
+        bfiq_file = borealis_to_borealis_rename(filename, 'bfiq', out_struct)
         rawacf_site = borealis_to_borealis_rename(filename, 'rawacf', 'site')
         rawacf_array = borealis_to_borealis_rename(filename, 'rawacf', 'array')
 
@@ -50,12 +54,13 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
         start = datetime.utcnow()
 
         if os.path.isfile(rawacf_site_path) or os.path.isfile(rawacf_array_path):
+            # Either one is fine, we aren't picky
             print(f'{path} - Already done. ', end='')
 
         elif os.path.isfile(bfiq_path):
             # bfiq already exists
             print(f'{bfiq_path} -> {rawacf_array}  ', end='')
-            ConvertFile(bfiq_path, rawacf_array_path, 'bfiq', 'rawacf', 'site', 'array', averaging_method)
+            ConvertFile(bfiq_path, rawacf_array_path, 'bfiq', 'rawacf', 'site', out_struct, averaging_method)
             os.remove(bfiq_path)       # Don't want to keep this around
 
         else:
@@ -75,7 +80,7 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
             if experiment_name in ['Widebeam_2tx', 'Widebeam_3tx', 'MultifreqWidebeam']:    # These ones need some love
                 print(f'{path} -> {rawacf_array}  ', end='')
                 ProcessWidebeamAntennasIQ2Bfiq(path, bfiq_path, input_structure, 'site')
-                ConvertFile(bfiq_path, rawacf_array_path, 'bfiq', 'rawacf', 'site', 'array', averaging_method)
+                ConvertFile(bfiq_path, rawacf_array_path, 'bfiq', 'rawacf', 'site', out_struct, averaging_method)
                 os.remove(bfiq_path)    # We don't need to keep these around
 
             elif experiment_name == 'BistaticTest':
@@ -83,17 +88,17 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
                     print(f'{path} - Bistatic listening experiment. ', end='')
                     # Search for file with timestamps to match against, then process.
                     fields = filename.split('.')
-                    timestamp_pattern = '.'.join([fields[0], fields[1][0:2], '*timestamps*'])   # YYYYMMDD.HH
-                    timestamp_files = glob.glob(f'{in_directory}/timestamps/{timestamp_pattern}')
+                    timestamp_pattern = f'{fields[0]}.{fields[1][0:2]}*timestamps*'   # YYYYMMDD.HH*timestamps*
+                    timestamp_files = glob.glob(f'{timestamp_dir}/{timestamp_pattern}')
                     if len(timestamp_files) == 0:
                         print('Error - no timestamp file.  ', end='')
                         continue
                     else:   # Expect 1 file
-                        print('Using timestamps from {timestamp_files[0]}.  ', end='')
+                        print(f'Using timestamps from {timestamp_files[0]}.  ', end='')
                         BistaticProcessing(path, rawacf_array_path, input_structure, 'array', timestamp_files[0])
                 else:
                     print(f'{path} -> {rawacf_array}  ', end='')
-                    ConvertFile(path, rawacf_array_path, 'antennas_iq', 'rawacf', input_structure, 'array', averaging_method)
+                    ConvertFile(path, rawacf_array_path, 'antennas_iq', 'rawacf', input_structure, out_struct, averaging_method)
             else:
                 print(f'{path} - Not a widebeam experiment.  ', end='')
 
@@ -106,8 +111,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('in_directory', type=str, help='Directory to search for files')
     parser.add_argument('out_directory', type=str, help='Path to save output files')
+    parser.add_argument('out_structure', type=str, help='Structure to save rawacf files as', default='site')
     parser.add_argument('--pattern', type=str, help='Pattern to match when searching for files',
                         default='*antennas_iq*')
+    parser.add_argument('--timestamp_dir', type=str, help='Path to directory with timestamp files')
     args = parser.parse_args()
 
-    main(args.in_directory, args.out_directory, args.pattern)
+    main(args.in_directory, args.out_directory, args.out_structure, args.pattern, args.timestamp_dir)
