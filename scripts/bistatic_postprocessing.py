@@ -51,6 +51,11 @@ def main(in_directory: str, out_directory: str, out_struct: str, search_pattern:
         rawacf_site_path = f'{out_directory}/{rawacf_site}'
         rawacf_array_path = f'{out_directory}/{rawacf_array}'
 
+        if out_struct == 'site':
+            rawacf_out = rawacf_site_path
+        else:
+            rawacf_out = rawacf_array_path
+
         start = datetime.utcnow()
 
         if os.path.isfile(rawacf_site_path) or os.path.isfile(rawacf_array_path):
@@ -59,8 +64,8 @@ def main(in_directory: str, out_directory: str, out_struct: str, search_pattern:
 
         elif os.path.isfile(bfiq_path):
             # bfiq already exists
-            print(f'{bfiq_path} -> {rawacf_array}  ', end='')
-            ConvertFile(bfiq_path, rawacf_array_path, 'bfiq', 'rawacf', 'site', out_struct, averaging_method)
+            print(f'{bfiq_path} -> {rawacf_out}  ', end='')
+            ConvertFile(bfiq_path, rawacf_out, 'bfiq', 'rawacf', 'site', out_struct, averaging_method)
             os.remove(bfiq_path)       # Don't want to keep this around
 
         else:
@@ -78,9 +83,9 @@ def main(in_directory: str, out_directory: str, out_struct: str, search_pattern:
                     experiment_comment = attributes['experiment_comment']
 
             if experiment_name in ['Widebeam_2tx', 'Widebeam_3tx', 'MultifreqWidebeam']:    # These ones need some love
-                print(f'{path} -> {rawacf_array}  ', end='')
+                print(f'{path} -> {rawacf_out}  ', end='')
                 ProcessWidebeamAntennasIQ2Bfiq(path, bfiq_path, input_structure, 'site')
-                ConvertFile(bfiq_path, rawacf_array_path, 'bfiq', 'rawacf', 'site', out_struct, averaging_method)
+                ConvertFile(bfiq_path, rawacf_out, 'bfiq', 'rawacf', 'site', out_struct, averaging_method)
                 os.remove(bfiq_path)    # We don't need to keep these around
 
             elif experiment_name == 'BistaticTest':
@@ -95,10 +100,10 @@ def main(in_directory: str, out_directory: str, out_struct: str, search_pattern:
                         continue
                     else:   # Expect 1 file
                         print(f'Using timestamps from {timestamp_files[0]}.  ', end='')
-                        BistaticProcessing(path, rawacf_array_path, input_structure, 'array', timestamp_files[0])
+                        BistaticProcessing(path, rawacf_out, input_structure, out_struct, timestamp_files[0])
                 else:
-                    print(f'{path} -> {rawacf_array}  ', end='')
-                    ConvertFile(path, rawacf_array_path, 'antennas_iq', 'rawacf', input_structure, out_struct, averaging_method)
+                    print(f'{path} -> {rawacf_out}  ', end='')
+                    ConvertFile(path, rawacf_out, 'antennas_iq', 'rawacf', input_structure, out_struct, averaging_method)
             else:
                 print(f'{path} - Not a widebeam experiment.  ', end='')
 
