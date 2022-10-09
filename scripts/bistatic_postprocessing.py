@@ -111,7 +111,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('in_directory', type=str, help='Directory to search for files')
     parser.add_argument('out_directory', type=str, help='Path to save output files')
-    parser.add_argument('out_structure', type=str, help='Structure to save rawacf files as', default='site')
+    parser.add_argument('--out_structure', type=str, help='Structure to save rawacf files as', default='site')
     parser.add_argument('--pattern', type=str, help='Pattern to match when searching for files',
                         default='*antennas_iq*')
     parser.add_argument('--timestamp_dir', type=str, help='Path to directory with timestamp files')
