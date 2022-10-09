@@ -40,8 +40,7 @@ class BistaticProcessing(BaseConvert):
         The desired structure of the output file. Same structures as above, plus 'dmap'.
     """
 
-    def __init__(self, infile: str, outfile: str, infile_type: str, outfile_type: str,
-                 infile_structure: str, outfile_structure: str, timestamps_file: str):
+    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str, timestamps_file: str):
         """
         Initialize the attributes of the class.
 
@@ -51,10 +50,6 @@ class BistaticProcessing(BaseConvert):
             Path to input file.
         outfile: str
             Path to output file.
-        infile_type: str
-            Borealis filetype of input file. 'antennas_iq', 'bfiq', or 'rawacf'.
-        outfile_type: str
-            Borealis filetype of output file. 'antennas_iq', 'bfiq', or 'rawacf'.
         infile_structure: str
             Borealis structure of input file. Either 'array' or 'site'.
         outfile_structure: str
@@ -62,9 +57,9 @@ class BistaticProcessing(BaseConvert):
         timestamps_file: str
             Path to file containing transmitting radar's sequence timestamps
         """
-        super().__init__(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure)
+        super().__init__(infile, outfile, 'antennas_iq', 'rawacf', infile_structure, outfile_structure)
 
-        timestamps_opened = dd.io.load(timestamps_file, '/')   # Load the whole file in
+        timestamps_opened = dd.io.load(timestamps_file)   # Load the whole file in
         keys = sorted(list(timestamps_opened.keys()))
 
         timestamps = np.concatenate([timestamps_opened[k]['sqn_timestamps'] for k in keys])
