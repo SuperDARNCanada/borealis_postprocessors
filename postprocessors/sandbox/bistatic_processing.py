@@ -124,6 +124,9 @@ class BistaticProcessing(BaseConvert):
                     keep_indices.append(i)
                     j += 1
 
+        if len(keep_indices) == 0:  # No overlapping timestamps, throw out this record
+            return None
+
         # Extract the good data
         data_dimensions = record['data_dimensions']
         data = record['data'].reshape(data_dimensions)
