@@ -192,10 +192,12 @@ class ProcessBfiq2Rawacf(BaseConvert):
         num_sequences = beamformed_samples_1.shape[0]
         pulses = list(record['pulses'])
         pulse_phase_offsets = record['pulse_phase_offset']
+        ppo_flag = False
         if len(pulse_phase_offsets) != len(record['pulses']):
             if len(pulse_phase_offsets) != 0:
                 if not np.isnan(pulse_phase_offsets[0]):
                     pulse_phase_offsets = pulse_phase_offsets.reshape((num_sequences, len(record['pulses'])))
+                    ppo_flag = True
 
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
@@ -237,7 +239,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
             phase_offsets = np.exp(1j * np.array(angle_offsets, np.float32))
 
             values = np.einsum('ijkl,l->ijkl', values, phase_offsets)
-        elif len(pulse_phase_offsets) != 0:
+        elif len(pulse_phase_offsets) != 0 and ppo_flag:
             raise ValueError('Dimensions of pulse_phase_offsets does not match dimensions of pulses')
 
         # Find the sample that corresponds to the second pulse transmitting
