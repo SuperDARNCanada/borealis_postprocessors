@@ -194,7 +194,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
         pulse_phase_offsets = record['pulse_phase_offset']
         if len(pulse_phase_offsets) != len(record['pulses']):
             if len(pulse_phase_offsets) != 0:
-                pulse_phase_offsets = pulse_phase_offsets.reshape((num_sequences, len(record['pulses'])))
+                if not np.isnan(pulse_phase_offsets[0]):
+                    pulse_phase_offsets = pulse_phase_offsets.reshape((num_sequences, len(record['pulses'])))
 
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']

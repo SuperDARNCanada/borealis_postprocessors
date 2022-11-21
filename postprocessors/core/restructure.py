@@ -31,17 +31,7 @@ def restructure(infile_name, outfile_name, infile_type, infile_structure, outfil
                                  borealis_file_structure=infile_structure)
         return
 
-    # Get data from the file
-    reader = pydarnio.BorealisRead(infile_name, infile_type, infile_structure)
-
-    # Get data in correct format for writing to output file
-    if outfile_structure == 'site':
-        data = reader.records
-    else:
-        data = reader.arrays
-
-    # Write to output file
-    pydarnio.BorealisWrite(outfile_name, data, infile_type, outfile_structure)
+    pydarnio.BorealisRestructure(infile_name, outfile_name, infile_type, outfile_structure)
 
 
 def convert_to_numpy(data: dict):
