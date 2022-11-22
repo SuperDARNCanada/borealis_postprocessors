@@ -79,8 +79,8 @@ def main(in_directory: str, out_directory: str, out_struct: str, search_pattern:
             else:
                 with h5py.File(path, 'r') as f:
                     attributes = f.attrs
-                    experiment_name = attributes['experiment_name']
-                    experiment_comment = attributes['experiment_comment']
+                    experiment_name = attributes['experiment_name'].decode('utf-8')
+                    experiment_comment = attributes['experiment_comment'].decode('utf-8')
 
             if experiment_name in ['Widebeam_2tx', 'Widebeam_3tx', 'MultifreqWidebeam']:    # These ones need some love
                 print(f'{path} -> {rawacf_out}  ', end='')
