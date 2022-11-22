@@ -37,7 +37,7 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
     """
 
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
-                 averaging_method: str = 'mean'):
+                 averaging_method: str = 'mean', **kwargs):
         """
         Initialize the attributes of the class.
 
@@ -57,7 +57,7 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
         super().__init__(infile, outfile, 'antennas_iq', 'rawacf', infile_structure, outfile_structure)
         self.averaging_method = averaging_method
 
-        self.process_file()
+        self.process_file(**kwargs)
 
     @staticmethod
     def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
