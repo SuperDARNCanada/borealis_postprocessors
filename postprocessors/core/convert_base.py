@@ -234,6 +234,7 @@ class BaseConvert(object):
                 num_completed = 0
                 indices = range(0, num_to_process, records_per_process)
 
+                print('Setting up the multiprocessing pool...')
                 with Pool(kwargs.get('num_processes', 5)) as p:
 
                     function_to_call = partial(processing_machine,
