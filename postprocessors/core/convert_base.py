@@ -11,7 +11,7 @@ from typing import Union
 import deepdish as dd
 import h5py
 from functools import partial
-from multiprocessing import Pool
+from multiprocessing import get_context
 
 from postprocessors.core.restructure import restructure, convert_to_numpy, FILE_STRUCTURE_MAPPING
 from postprocessors import conversion_exceptions
@@ -234,8 +234,7 @@ class BaseConvert(object):
                 num_completed = 0
                 indices = range(0, num_to_process, records_per_process)
 
-                print('Setting up the multiprocessing pool...')
-                with Pool(kwargs.get('num_processes', 5)) as p:
+                with get_context("spawn").Pool(kwargs.get('num_processes', 5)) as p:
 
                     function_to_call = partial(processing_machine,
                                                filename=file_to_process, record_keys=records,
