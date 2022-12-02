@@ -185,6 +185,13 @@ class BaseConvert(object):
         ProcessAntennasIQ2Rawacf
         ProcessBfiq2Rawacf
         """
+
+        if os.path.isfile(self.outfile) and not kwargs.get('force', False):
+            choice = input(f'Output file {self.outfile} already exists. Proceed anyway? Only records which don\'t '
+                           f'exist in output file will be processed. (y/n): ')
+            if choice[0] not in ['y', 'Y']:
+                return 0
+
         try:
             # Restructure to 'site' format if necessary
             if self.infile_structure != 'site':
@@ -205,6 +212,12 @@ class BaseConvert(object):
 
             postprocessing_logger.info(f'Converting file {file_to_process} --> {processed_file}')
 
+            # First we want to check if any records have all been done, to lighten our workload
+            finished_records = set()
+            if os.path.isfile(processed_file) and not kwargs.get('force', False):
+                with h5py.File(processed_file, 'r') as f:
+                    finished_records = set(f.keys())
+
             # Load file
             with h5py.File(file_to_process, 'r') as f:
                 records = f.keys()
@@ -214,7 +227,12 @@ class BaseConvert(object):
                 if 'avg_num' in kwargs:
                     records_per_process = kwargs['avg_num']     # Records are getting averaged together.
 
-                indices = range(0, len(records), records_per_process)
+                if not kwargs.get('force', False):  # file may be partially processed, only process remaining records
+                    records = sorted(list(set(records[::records_per_process]).difference(finished_records)))
+
+                num_to_process = len(records)
+                num_completed = 0
+                indices = range(0, num_to_process, records_per_process)
 
                 with Pool(kwargs.get('num_processes', 5)) as p:
 
@@ -224,7 +242,8 @@ class BaseConvert(object):
                                                averaging_method=self.averaging_method,
                                                processing_fn=self.process_record, **kwargs)
 
-                    for completed_record, i in p.map(function_to_call, indices):
+                    for completed_record, i in p.imap(function_to_call, indices):
+                        num_completed += 1
                         if completed_record is not None:
                             # Save record to temporary file
                             tempfile = f'/tmp/{records[i]}.tmp'
@@ -236,6 +255,12 @@ class BaseConvert(object):
 
                             # Remove temporary file
                             os.remove(tempfile)
+                        completion_percentage = num_completed / num_to_process
+                        bar_width = 60  # arbitrary width
+                        filled = int(bar_width * completion_percentage)
+                        unfilled = bar_width - filled
+                        print(f'\r[{"="*filled}{" "*unfilled}] {completion_percentage*100:.2f}%', flush=True, end='')
+                    print()     # Keep the progress bar on its own line
 
             # Restructure to final structure format, if necessary
             if self.outfile_structure != 'site':
