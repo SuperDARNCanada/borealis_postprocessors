@@ -55,14 +55,13 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
     -------
     formatted_record, idx: properly-formatted processed record and the index which was processed.
     """
-
     record_dict = dd.io.load(filename, f'/{record_keys[idx]}')
     record_list = []  # List of all 'extra' records to process
 
     # If processing multiple records at a time, get all the records ready
     if records_per_process > 1:
-        for num in range(idx, min(idx + records_per_process, len(record_keys))):
-            record_list.append(dd.io.load(filename, f'/{record_keys[idx + num]}'))
+        for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
+            record_list.append(dd.io.load(filename, f'/{record_keys[num]}'))
 
     processed_record = processing_fn(record_dict, averaging_method, extra_records=record_list, **kwargs)
 
@@ -220,24 +219,22 @@ class BaseConvert(object):
 
             # Load file
             with h5py.File(file_to_process, 'r') as f:
-                records = f.keys()
-                records = sorted(list(records))
-
-                records_per_process = 1
-                if 'avg_num' in kwargs:
-                    records_per_process = kwargs['avg_num']     # Records are getting averaged together.
+                all_records = sorted(list(f.keys()))
+                records_per_process = kwargs.get('avg_num', 1)      # Records are getting averaged together.
 
                 if not kwargs.get('force', False):  # file may be partially processed, only process remaining records
-                    records = sorted(list(set(records[::records_per_process]).difference(finished_records)))
+                    final_records_remaining = sorted(list(
+                        set(all_records[::records_per_process]).difference(finished_records)))
 
-                num_to_process = len(records)
-                num_completed = 0
-                indices = range(0, num_to_process, records_per_process)
+                first_idx = all_records.index(final_records_remaining[0])   # first record to process
+                num_to_process = round(len(all_records) / records_per_process)
+                num_completed = first_idx
+                indices = range(first_idx, len(all_records), records_per_process)
 
                 with get_context("spawn").Pool(kwargs.get('num_processes', 5)) as p:
 
                     function_to_call = partial(processing_machine,
-                                               filename=file_to_process, record_keys=records,
+                                               filename=file_to_process, record_keys=all_records,
                                                records_per_process=records_per_process,
                                                averaging_method=self.averaging_method,
                                                processing_fn=self.process_record, **kwargs)
@@ -246,11 +243,11 @@ class BaseConvert(object):
                         num_completed += 1
                         if completed_record is not None:
                             # Save record to temporary file
-                            tempfile = f'/tmp/{records[i]}.tmp'
+                            tempfile = f'/tmp/{all_records[i]}.tmp'
                             dd.io.save(tempfile, completed_record, compression=None)
 
                             # Copy record to output file
-                            cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {records[i]}'
+                            cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {all_records[i]}'
                             sp.call(cmd.split())
 
                             # Remove temporary file
