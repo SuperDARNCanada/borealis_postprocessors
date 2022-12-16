@@ -178,12 +178,6 @@ class ProcessBfiq2Rawacf(BaseConvert):
             Array of correlations for each sequence, beam, range, and lag
         """
 
-        # beamformed_samples_1: [num_sequences, num_beams, num_samples]
-        # beamformed_samples_2: [num_sequences, num_beams, num_samples]
-        # correlated:           [num_sequences, num_beams, num_samples, num_samples]
-        correlated = np.einsum('ijk,ijl->ijkl', beamformed_samples_1, beamformed_samples_2.conj())
-
-
         values = []
         if record['lags'].size == 0:
             values.append(np.array([]))
@@ -220,7 +214,11 @@ class ProcessBfiq2Rawacf(BaseConvert):
         column = samples_for_all_range_lags[..., 0].astype(np.int32)
 
         # [num_sequences, num_beams, num_range_gates, num_lags]
-        values = correlated[..., row, column]
+        values = np.zeros(beamformed_samples_1.shape[:2] + row.shape[:2], dtype=np.complex64)
+
+        # Find the correlations
+        for lag in range(row.shape[1]):
+            values[..., lag] = beamformed_samples_1[..., row[:, lag]] * beamformed_samples_2[..., column[:, lag]].conj()
 
         # Remove pulse_phase_offsets if they are present
         if len(pulse_phase_offsets) == len(pulses):
