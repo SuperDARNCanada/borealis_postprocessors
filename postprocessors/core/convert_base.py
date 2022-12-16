@@ -6,6 +6,7 @@ to bfiq files.
 """
 import os
 import subprocess as sp
+import traceback
 from collections import OrderedDict
 from typing import Union
 import deepdish as dd
@@ -267,6 +268,7 @@ class BaseConvert(object):
             postprocessing_logger.error(f'Could not process file {self.infile} -> {self.outfile}. Removing all newly'
                                         f' generated files.')
             postprocessing_logger.error(e)
+            postprocessing_logger.error(traceback.print_exc())
         finally:
             self._remove_temp_files()
 
