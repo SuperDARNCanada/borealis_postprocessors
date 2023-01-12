@@ -14,7 +14,7 @@ def create_timestamp_file(infile: str, outfile: str):
     num_sqns = dd.io.load(infile, '/num_sequences')
     for i in range(num_sqns.shape[0]):
         # key is the timestamp in seconds past epoch, value is the array
-        new_group[f'{timestamps[i, 0] * 1000:.0f}'] = timestamps[i, :num_sqns[i]]
+        new_group[f'{timestamps[i, 0] * 1000:.0f}'] = {'data': {'sqn_timestamps': timestamps[i, :num_sqns[i]]}}
 
     dd.io.save(outfile, new_group)
 
