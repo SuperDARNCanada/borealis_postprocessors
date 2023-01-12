@@ -3,7 +3,20 @@ import glob
 import os
 from datetime import datetime
 
+import deepdish as dd
+
 from postprocessors.sandbox.extract_timestamps import ExtractTimestamps
+
+
+def create_timestamp_file(infile: str, outfile: str):
+    new_group = {}
+    timestamps = dd.io.load(infile, '/sqn_timestamps')
+    num_sqns = dd.io.load(infile, '/num_sequences')
+    for i in range(num_sqns.shape[0]):
+        # key is the timestamp in seconds past epoch, value is the array
+        new_group[f'{timestamps[i, 0] * 1000:.0f}'] = timestamps[i, :num_sqns[i]]
+
+    dd.io.save(outfile, new_group)
 
 
 def main(in_directory: str, out_directory: str, search_pattern: str):
@@ -41,7 +54,8 @@ def main(in_directory: str, out_directory: str, search_pattern: str):
         else:
             # The input file type (antennas_iq, bfiq, rawacf) doesn't matter, so just using antennas_iq as placeholder
             # We have to process it downstream so the process_record method is called, so output_type is 'bfiq'
-            ExtractTimestamps(path, timestamp_path, 'antennas_iq', 'bfiq', input_structure, 'site')
+            # ExtractTimestamps(path, timestamp_path, 'antennas_iq', 'bfiq', input_structure, 'site')
+            create_timestamp_file(path, timestamp_path)
 
         end = datetime.utcnow()
         duration = (end - start).total_seconds()
