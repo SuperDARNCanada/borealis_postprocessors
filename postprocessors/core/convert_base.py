@@ -239,7 +239,7 @@ class BaseConvert(object):
                                                records_per_process=records_per_process,
                                                averaging_method=self.averaging_method,
                                                processing_fn=self.process_record, **kwargs)
-
+                    print() # Put the progress bar on a newline
                     for completed_record, i in p.imap(function_to_call, indices):
                         num_completed += 1
                         if completed_record is not None:
