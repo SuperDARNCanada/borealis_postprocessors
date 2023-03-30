@@ -8,8 +8,7 @@ from typing import Union
 
 import numpy as np
 
-from data_processing.convert_base import BaseConvert
-from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
+from postprocessors import BaseConvert, ProcessBfiq2Rawacf
 
 
 class ProcessIMPT(BaseConvert):

@@ -9,7 +9,7 @@ import numpy as np
 from collections import OrderedDict
 from typing import Union
 
-from data_processing.convert_base import BaseConvert
+from postprocessors import BaseConvert
 
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
@@ -45,7 +45,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
     """
 
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
-                 averaging_method: str = 'mean'):
+                 averaging_method: str = 'mean', **kwargs):
         """
         Initialize the attributes of the class.
 
@@ -65,7 +65,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
         super().__init__(infile, outfile, 'bfiq', 'rawacf', infile_structure, outfile_structure)
         self.averaging_method = averaging_method
 
-        self.process_file()
+        self.process_file(**kwargs)
 
     @staticmethod
     def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
@@ -178,12 +178,6 @@ class ProcessBfiq2Rawacf(BaseConvert):
             Array of correlations for each sequence, beam, range, and lag
         """
 
-        # beamformed_samples_1: [num_sequences, num_beams, num_samples]
-        # beamformed_samples_2: [num_sequences, num_beams, num_samples]
-        # correlated:           [num_sequences, num_beams, num_samples, num_samples]
-        correlated = np.einsum('ijk,ijl->ijkl', beamformed_samples_1, beamformed_samples_2.conj())
-
-
         values = []
         if record['lags'].size == 0:
             values.append(np.array([]))
@@ -192,9 +186,12 @@ class ProcessBfiq2Rawacf(BaseConvert):
         num_sequences = beamformed_samples_1.shape[0]
         pulses = list(record['pulses'])
         pulse_phase_offsets = record['pulse_phase_offset']
+        ppo_flag = False
         if len(pulse_phase_offsets) != len(record['pulses']):
             if len(pulse_phase_offsets) != 0:
-                pulse_phase_offsets = pulse_phase_offsets.reshape((num_sequences, len(record['pulses'])))
+                if not np.isnan(pulse_phase_offsets[0]):
+                    pulse_phase_offsets = pulse_phase_offsets.reshape((num_sequences, len(record['pulses'])))
+                    ppo_flag = True
 
         # First range offset in samples
         sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
@@ -217,7 +214,11 @@ class ProcessBfiq2Rawacf(BaseConvert):
         column = samples_for_all_range_lags[..., 0].astype(np.int32)
 
         # [num_sequences, num_beams, num_range_gates, num_lags]
-        values = correlated[..., row, column]
+        values = np.zeros(beamformed_samples_1.shape[:2] + row.shape[:2], dtype=np.complex64)
+
+        # Find the correlations
+        for lag in range(row.shape[1]):
+            values[..., lag] = beamformed_samples_1[..., row[:, lag]] * beamformed_samples_2[..., column[:, lag]].conj()
 
         # Remove pulse_phase_offsets if they are present
         if len(pulse_phase_offsets) == len(pulses):
@@ -236,7 +237,7 @@ class ProcessBfiq2Rawacf(BaseConvert):
             phase_offsets = np.exp(1j * np.array(angle_offsets, np.float32))
 
             values = np.einsum('ijkl,l->ijkl', values, phase_offsets)
-        elif len(pulse_phase_offsets) != 0:
+        elif len(pulse_phase_offsets) != 0 and ppo_flag:
             raise ValueError('Dimensions of pulse_phase_offsets does not match dimensions of pulses')
 
         # Find the sample that corresponds to the second pulse transmitting

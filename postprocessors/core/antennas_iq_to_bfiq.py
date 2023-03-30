@@ -11,7 +11,7 @@ from typing import Union
 import numpy as np
 from scipy.constants import speed_of_light
 
-from data_processing.convert_base import BaseConvert
+from postprocessors import BaseConvert
 
 try:
     import cupy as xp
@@ -52,7 +52,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         The desired structure of the output file. Same structures as above, plus 'iqdat'.
     """
 
-    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str):
+    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str, **kwargs):
         """
         Initialize the attributes of the class.
 
@@ -69,7 +69,7 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         """
         super().__init__(infile, outfile, 'antennas_iq', 'bfiq', infile_structure, outfile_structure)
 
-        self.process_file()
+        self.process_file(**kwargs)
 
     @staticmethod
     def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:

@@ -8,8 +8,7 @@ from collections import OrderedDict
 from typing import Union
 import numpy as np
 
-from data_processing.convert_base import BaseConvert
-from data_processing.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
+from postprocessors import BaseConvert, ProcessAntennasIQ2Bfiq
 
 
 class ProcessWidebeamAntennasIQ2Bfiq(BaseConvert):

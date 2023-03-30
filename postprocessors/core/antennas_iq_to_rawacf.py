@@ -7,9 +7,7 @@ to rawacf files.
 from collections import OrderedDict
 from typing import Union
 
-from data_processing.convert_base import BaseConvert
-from data_processing.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
-from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
+from postprocessors import BaseConvert, ProcessAntennasIQ2Bfiq, ProcessBfiq2Rawacf
 
 
 class ProcessAntennasIQ2Rawacf(BaseConvert):
@@ -39,7 +37,7 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
     """
 
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
-                 averaging_method: str = 'mean'):
+                 averaging_method: str = 'mean', **kwargs):
         """
         Initialize the attributes of the class.
 
@@ -59,7 +57,7 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
         super().__init__(infile, outfile, 'antennas_iq', 'rawacf', infile_structure, outfile_structure)
         self.averaging_method = averaging_method
 
-        self.process_file()
+        self.process_file(**kwargs)
 
     @staticmethod
     def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:

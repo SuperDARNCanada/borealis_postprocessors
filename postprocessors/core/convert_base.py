@@ -6,13 +6,16 @@ to bfiq files.
 """
 import os
 import subprocess as sp
+import traceback
 from collections import OrderedDict
 from typing import Union
 import deepdish as dd
 import h5py
+from functools import partial
+from multiprocessing import get_context
 
-from data_processing.utils.restructure import restructure, convert_to_numpy, FILE_STRUCTURE_MAPPING
-from exceptions import conversion_exceptions
+from postprocessors.core.restructure import restructure, convert_to_numpy, FILE_STRUCTURE_MAPPING
+from postprocessors import conversion_exceptions
 
 try:
     import cupy as xp
@@ -25,6 +28,50 @@ else:
 import logging
 
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
+
+
+def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, averaging_method: str,
+                       processing_fn, **kwargs):
+    """
+    Helper function for processing a single record. It is defined here to facilitate multiprocessing.
+
+    Parameters
+    ----------
+    idx: int
+        Index into record_keys which tells processing_machine() which record to process
+    filename: str
+        Name of the HDF5 file with records to process.
+    record_keys: list
+        List of all top-level keys of the HDF5 file.
+    records_per_process: int
+        Number of records to process per call to this function.
+    averaging_method: str
+        Method for averaging rawacf data. Either 'mean' or 'median'
+    processing_fn: callable
+        Function to call to process a record.
+    kwargs: dict
+        Key-word arguments to pass to processing_fn
+
+    Returns
+    -------
+    formatted_record, idx: properly-formatted processed record and the index which was processed.
+    """
+    record_dict = dd.io.load(filename, f'/{record_keys[idx]}')
+    record_list = []  # List of all 'extra' records to process
+
+    # If processing multiple records at a time, get all the records ready
+    if records_per_process > 1:
+        for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
+            record_list.append(dd.io.load(filename, f'/{record_keys[num]}'))
+
+    processed_record = processing_fn(record_dict, averaging_method, extra_records=record_list, **kwargs)
+
+    if processed_record is None:
+        return None, idx
+    else:
+        # Convert to numpy arrays for saving to file with deepdish
+        formatted_record = convert_to_numpy(processed_record)
+        return formatted_record, idx
 
 
 class BaseConvert(object):
@@ -138,6 +185,13 @@ class BaseConvert(object):
         ProcessAntennasIQ2Rawacf
         ProcessBfiq2Rawacf
         """
+
+        if os.path.isfile(self.outfile) and not kwargs.get('force', False):
+            choice = input(f'Output file {self.outfile} already exists. Proceed anyway? Only records which don\'t '
+                           f'exist in output file will be processed. (y/n): ')
+            if choice[0] not in ['y', 'Y']:
+                return 0
+
         try:
             # Restructure to 'site' format if necessary
             if self.infile_structure != 'site':
@@ -158,52 +212,53 @@ class BaseConvert(object):
 
             postprocessing_logger.info(f'Converting file {file_to_process} --> {processed_file}')
 
+            # First we want to check if any records have all been done, to lighten our workload
+            finished_records = set()
+            if os.path.isfile(processed_file) and not kwargs.get('force', False):
+                with h5py.File(processed_file, 'r') as f:
+                    finished_records = set(f.keys())
+
             # Load file
             with h5py.File(file_to_process, 'r') as f:
-                records = f.keys()
-                records = sorted(list(records))
+                all_records = sorted(list(f.keys()))
+                records_per_process = kwargs.get('avg_num', 1)      # Records are getting averaged together.
 
-                completed_records = []
+                if not kwargs.get('force', False):  # file may be partially processed, only process remaining records
+                    final_records_remaining = sorted(list(
+                        set(all_records[::records_per_process]).difference(finished_records)))
 
-                # Process each record
-                for i, record in enumerate(records):
+                first_idx = all_records.index(final_records_remaining[0])   # first record to process
+                num_to_process = round(len(all_records) / records_per_process)
+                num_completed = first_idx
+                indices = range(first_idx, len(all_records), records_per_process)
 
-                    # Skip records that have already been processed
-                    if record in completed_records:
-                        continue
+                with get_context("spawn").Pool(kwargs.get('num_processes', 5)) as p:
 
-                    record_dict = dd.io.load(file_to_process, f'/{record}')
-                    record_list = []  # List of all 'extra' records to process
+                    function_to_call = partial(processing_machine,
+                                               filename=file_to_process, record_keys=all_records,
+                                               records_per_process=records_per_process,
+                                               averaging_method=self.averaging_method,
+                                               processing_fn=self.process_record, **kwargs)
+                    print() # Put the progress bar on a newline
+                    for completed_record, i in p.imap(function_to_call, indices):
+                        num_completed += 1
+                        if completed_record is not None:
+                            # Save record to temporary file
+                            tempfile = f'/tmp/{all_records[i]}.tmp'
+                            dd.io.save(tempfile, completed_record, compression=None)
 
-                    # If processing multiple records at a time, get all the records ready
-                    if 'avg_num' in kwargs:
-                        for num in range(1, kwargs['avg_num']):
-                            try:
-                                record_list.append(dd.io.load(file_to_process, f'/{records[i+num]}'))
-                                completed_records.append(records[i+num])    # Record the 'extra' records so we don't process twice
-                            except IndexError:
-                                # Last record may average less than the specified number of records
-                                break
+                            # Copy record to output file
+                            cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {all_records[i]}'
+                            sp.call(cmd.split())
 
-                    beamformed_record = self.process_record(record_dict, self.averaging_method, extra_records=record_list,
-                                                            **kwargs)
-
-                    # Convert to numpy arrays for saving to file with deepdish
-                    formatted_record = convert_to_numpy(beamformed_record)
-
-                    # Save record to temporary file
-                    tempfile = f'/tmp/{record}.tmp'
-                    dd.io.save(tempfile, formatted_record, compression=None)
-
-                    # Copy record to output file
-                    cmd = f'h5copy -i {tempfile} -o {processed_file} -s / -d {record}'
-                    sp.call(cmd.split())
-
-                    # Add record to list of processed records
-                    completed_records.append(record)
-
-                    # Remove temporary file
-                    os.remove(tempfile)
+                            # Remove temporary file
+                            os.remove(tempfile)
+                        completion_percentage = num_completed / num_to_process
+                        bar_width = 60  # arbitrary width
+                        filled = int(bar_width * completion_percentage)
+                        unfilled = bar_width - filled
+                        print(f'\r[{"="*filled}{" "*unfilled}] {completion_percentage*100:.2f}%', flush=True, end='')
+                    print()     # Keep the progress bar on its own line
 
             # Restructure to final structure format, if necessary
             if self.outfile_structure != 'site':
@@ -213,6 +268,7 @@ class BaseConvert(object):
             postprocessing_logger.error(f'Could not process file {self.infile} -> {self.outfile}. Removing all newly'
                                         f' generated files.')
             postprocessing_logger.error(e)
+            postprocessing_logger.error(traceback.print_exc())
         finally:
             self._remove_temp_files()
 
