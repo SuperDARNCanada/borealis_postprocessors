@@ -83,7 +83,10 @@ def write_records(hdf5_file: h5py.File, records: dict):
                 array_field = True
             elif isinstance(v, np.ndarray):
                 if isinstance(v[0], str):
-                    data = np.bytes_(v)
+                    dset = group.create_dataset(k, data=v.view(dtype=np.uint8))
+                    dset.attrs['strtype'] = b'unicode'
+                    dset.attrs['itemsize'] = v.dtype.itemsize // 4  # every character is 4 bytes
+                    continue
                 else:
                     data = v
                 array_field = True

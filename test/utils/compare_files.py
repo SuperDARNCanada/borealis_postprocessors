@@ -4,12 +4,13 @@
 This file contains functions for comparing the contents of two HDF5 files.
 """
 import deepdish as dd
+import h5py
 import numpy as np
 
 
 def compare_files(file1, file2):
-    group1 = dd.io.load(file1)
-    group2 = dd.io.load(file2)
+    group1 = h5py.File(file1, 'r')
+    group2 = h5py.File(file2, 'r')
 
     def compare_dictionaries(dict1, dict2, prefix):
         compare_string = ""
@@ -18,6 +19,12 @@ def compare_files(file1, file2):
         uniq1 = keys1.difference(keys2)
         uniq2 = keys2.difference(keys1)
         shared = keys1.intersection(keys2)
+
+        attrs1 = set(dict1.attrs.keys())
+        attrs2 = set(dict2.attrs.keys())
+        uniq_attrs1 = attrs1.difference(attrs2)
+        uniq_attrs2 = attrs2.difference(attrs1)
+        shared_attrs = attrs1.intersection(attrs2)
 
         try:
             assert len(uniq1) == len(uniq2) == 0
@@ -33,7 +40,7 @@ def compare_files(file1, file2):
             if type(entry1) != type(entry2):
                 compare_string += prefix + f'Mismatched types for key {key}'
             # If they are dictionaries, recurse
-            elif type(entry1) == dict:
+            elif type(entry1) == h5py.Group:
                 compare_dictionaries(entry1, entry2, prefix + '\t')
             # Otherwise, they must be lists or values, and so can be compared directly
             else:
@@ -48,7 +55,7 @@ def compare_files(file1, file2):
                     equal = False
 
                 if not equal:
-                    compare_string += prefix + f"/{key}\n"
+                    compare_string += prefix + f"/{key}:\n\t{entry1}\n\t{entry2}\n"
 
         return compare_string
 
