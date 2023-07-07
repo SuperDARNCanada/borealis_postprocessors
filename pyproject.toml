@@ -16,7 +16,7 @@ classifiers = [
     'Operating System :: Linux',
 ]
 keywords = ['SuperDARN', 'Borealis']
-dependencies = ['numpy', 'pyDARNio', 'h5py', 'deepdish', 'scipy', ]
+dependencies = ['numpy', 'pyDARNio', 'h5py', 'scipy', ]
 requires-python = '>=3.6'
 
 [project.optional-dependencies]

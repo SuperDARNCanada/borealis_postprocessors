@@ -3,7 +3,6 @@
 """
 This file contains functions for comparing the contents of two HDF5 files.
 """
-import deepdish as dd
 import h5py
 import numpy as np
 
@@ -44,18 +43,19 @@ def compare_files(file1, file2):
                 compare_dictionaries(entry1, entry2, prefix + '\t')
             # Otherwise, they must be lists or values, and so can be compared directly
             else:
-                equal = True
-
                 # Compare floating-point values differently
                 if 'float' in str(entry1.dtype) or 'complex' in str(entry1.dtype):
                     if not np.allclose(entry1, entry2, equal_nan=True):
-                        equal = False
+                        compare_string += prefix + f"/{key}:\n" \
+                                                   f"\t{entry1}\n" \
+                                                   f"\t{entry2}\n" \
+                                                   f"\tDifference: " \
+                                                   f"{np.nanmax(np.abs((entry1[:] - entry2[:])/entry1[:]))}\n"
                 # Comparing non-floating-point values
                 elif not np.array_equal(entry1, entry2):
-                    equal = False
-
-                if not equal:
-                    compare_string += prefix + f"/{key}:\n\t{entry1}\n\t{entry2}\n"
+                    compare_string += prefix + f"/{key}:\n" \
+                                               f"\t{entry1}\n" \
+                                               f"\t{entry2}\n"
 
         return compare_string
 
