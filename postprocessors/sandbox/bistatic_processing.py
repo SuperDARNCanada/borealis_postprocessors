@@ -5,8 +5,8 @@ This file contains functions for processing bistatic_test antennas_iq files to r
 """
 from collections import OrderedDict
 from typing import Union
+import h5py
 import numpy as np
-import deepdish as dd
 
 from postprocessors import BaseConvert, ProcessAntennasIQ2Rawacf
 
@@ -59,10 +59,10 @@ class BistaticProcessing(BaseConvert):
         """
         super().__init__(infile, outfile, 'antennas_iq', 'rawacf', infile_structure, outfile_structure)
 
-        timestamps_opened = dd.io.load(timestamps_file)   # Load the whole file in
-        keys = sorted(list(timestamps_opened.keys()))
+        with h5py.File(timestamps_file, 'r') as tstamp_file:
+            keys = sorted(list(tstamp_file.keys()))
 
-        timestamps = np.concatenate([timestamps_opened[k]['data']['sqn_timestamps'] for k in keys])
+            timestamps = np.concatenate([tstamp_file[k]['data']['sqn_timestamps'][:] for k in keys])
         timestamps = np.around(timestamps, decimals=6)      # round to nearest microsecond
 
         self.process_file(timestamps=timestamps)
