@@ -7,14 +7,13 @@ to rawacf files.
 import logging
 import numpy as np
 from collections import OrderedDict
-from typing import Union
 
 from postprocessors import BaseConvert
 
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-class ProcessBfiq2Rawacf(BaseConvert):
+class Bfiq2Rawacf(BaseConvert):
     """
     Class for conversion of Borealis bfiq files into rawacf files. This class inherits from
     BaseConvert, which handles all functionality generic to postprocessing borealis files.
@@ -23,8 +22,6 @@ class ProcessBfiq2Rawacf(BaseConvert):
     --------
     ConvertFile
     BaseConvert
-    ProcessAntennasIQ2Bfiq
-    ProcessAntennasIQ2Rawacf
 
     Attributes
     ----------
@@ -33,19 +30,15 @@ class ProcessBfiq2Rawacf(BaseConvert):
     outfile: str
         The file name of output file
     infile_structure: str
-        The write structure of the file. Structures include:
+        The structure of the file. Structures include:
         'array'
         'site'
     outfile_structure: str
         The desired structure of the output file. Same structures as
         above, with the addition of 'dmap'.
-    averaging_method: str
-        Averaging method for computing correlations (for processing into rawacf files).
-        Acceptable values are 'mean' and 'median'.
     """
 
-    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
-                 averaging_method: str = 'mean', **kwargs):
+    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str):
         """
         Initialize the attributes of the class.
 
@@ -59,16 +52,11 @@ class ProcessBfiq2Rawacf(BaseConvert):
             Borealis structure of input file. Either 'array' or 'site'.
         outfile_structure: str
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
-        averaging_method: str
-            Method for averaging correlations across sequences. Either 'median' or 'mean'.
         """
         super().__init__(infile, outfile, 'bfiq', 'rawacf', infile_structure, outfile_structure)
-        self.averaging_method = averaging_method
-
-        self.process_file(**kwargs)
 
     @classmethod
-    def process_record(cls, record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         """
         Takes a record from a bfiq file and processes it into record for rawacf file.
 
@@ -76,16 +64,13 @@ class ProcessBfiq2Rawacf(BaseConvert):
         ----------
         record: OrderedDict
             hdf5 record containing bfiq data and metadata
-        averaging_method: Union[None, str]
-            Averaging method to use. Supported methods are 'mean' and 'median'.
 
         Returns
         -------
         record: OrderedDict
             record converted to rawacf format
         """
-        if averaging_method is None:
-            averaging_method = 'mean'
+        averaging_method = kwargs.get('averaging_method', 'mean')
         record['averaging_method'] = averaging_method
 
         correlations = cls.calculate_correlations(record, averaging_method)
@@ -127,15 +112,9 @@ class ProcessBfiq2Rawacf(BaseConvert):
         num_arrays, num_sequences, num_beams, num_samps = record['data_dimensions']
         bfiq_data = bfiq_data.reshape(record['data_dimensions'])
 
-        main_corrs_unavg = cls.correlations_from_samples(bfiq_data[0, ...],
-                                                                        bfiq_data[0, ...],
-                                                                        record)
-        intf_corrs_unavg = cls.correlations_from_samples(bfiq_data[1, ...],
-                                                                        bfiq_data[1, ...],
-                                                                        record)
-        cross_corrs_unavg = cls.correlations_from_samples(bfiq_data[1, ...],
-                                                                         bfiq_data[0, ...],
-                                                                         record)
+        main_corrs_unavg = cls.correlations_from_samples(bfiq_data[0, ...], bfiq_data[0, ...], record)
+        intf_corrs_unavg = cls.correlations_from_samples(bfiq_data[1, ...], bfiq_data[1, ...], record)
+        cross_corrs_unavg = cls.correlations_from_samples(bfiq_data[1, ...], bfiq_data[0, ...], record)
 
         if averaging_method == 'median':
             main_corrs = np.median(np.real(main_corrs_unavg), axis=0) + 1j * np.median(np.imag(main_corrs_unavg),

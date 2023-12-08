@@ -8,10 +8,10 @@ from collections import OrderedDict
 from typing import Union
 import numpy as np
 
-from postprocessors import BaseConvert, ProcessAntennasIQ2Bfiq
+from postprocessors import BaseConvert, AntennasIQ2Bfiq
 
 
-class ProcessWidebeamAntennasIQ2Bfiq(BaseConvert):
+class WidebeamAntennasIQ2Bfiq(BaseConvert):
     """
     Class for conversion of Borealis antennas_iq files into rawacf files for beam-broadening experiments. This class
     inherits from BaseConvert, which handles all functionality generic to postprocessing borealis files.
@@ -104,18 +104,18 @@ class ProcessWidebeamAntennasIQ2Bfiq(BaseConvert):
         record: OrderedDict
             hdf5 record, with new fields required by rawacf data format
         """
-        record['first_range'] = ProcessAntennasIQ2Bfiq.calculate_first_range(record)
-        record['first_range_rtt'] = ProcessAntennasIQ2Bfiq.calculate_first_range_rtt(record)
-        record['lags'] = ProcessAntennasIQ2Bfiq.create_lag_table(record)
-        record['range_sep'] = ProcessAntennasIQ2Bfiq.calculate_range_separation(record)
-        record['num_ranges'] = ProcessAntennasIQ2Bfiq.get_number_of_ranges(record)
+        record['first_range'] = AntennasIQ2Bfiq.calculate_first_range(record)
+        record['first_range_rtt'] = AntennasIQ2Bfiq.calculate_first_range_rtt(record)
+        record['lags'] = AntennasIQ2Bfiq.create_lag_table(record)
+        record['range_sep'] = AntennasIQ2Bfiq.calculate_range_separation(record)
+        record['num_ranges'] = AntennasIQ2Bfiq.get_number_of_ranges(record)
 
         record['beam_azms'] = np.float64(kwargs['beam_azms'])
         record['beam_nums'] = np.uint32(kwargs['beam_nums'])
 
-        record['data'] = ProcessAntennasIQ2Bfiq.beamform_data(record)
-        record['data_descriptors'] = ProcessAntennasIQ2Bfiq.get_data_descriptors()
-        record['data_dimensions'] = ProcessAntennasIQ2Bfiq.get_data_dimensions(record)
-        record['antenna_arrays_order'] = ProcessAntennasIQ2Bfiq.change_antenna_arrays_order()
+        record['data'] = AntennasIQ2Bfiq.beamform_data(record)
+        record['data_descriptors'] = AntennasIQ2Bfiq.get_data_descriptors()
+        record['data_dimensions'] = AntennasIQ2Bfiq.get_data_dimensions(record)
+        record['antenna_arrays_order'] = AntennasIQ2Bfiq.change_antenna_arrays_order()
 
         return record

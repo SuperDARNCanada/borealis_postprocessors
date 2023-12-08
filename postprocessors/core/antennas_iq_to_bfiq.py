@@ -6,7 +6,6 @@ to bfiq files.
 """
 import itertools
 from collections import OrderedDict
-from typing import Union
 
 import numpy as np
 from scipy.constants import speed_of_light
@@ -27,7 +26,7 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-class ProcessAntennasIQ2Bfiq(BaseConvert):
+class AntennasIQ2Bfiq(BaseConvert):
     """
     Class for conversion of Borealis antennas_iq files into bfiq files. This class inherits from
     BaseConvert, which handles all functionality generic to postprocessing borealis files.
@@ -36,7 +35,6 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
     --------
     ConvertFile
     BaseConvert
-    ProcessAntennasIQ2Rawacf
 
     Attributes
     ----------
@@ -45,14 +43,14 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
     outfile: str
         The file name of output file
     infile_structure: str
-        The write structure of the file. Structures include:
+        The structure of the file. Structures include:
         'array'
         'site'
     outfile_structure: str
         The desired structure of the output file. Same structures as above, plus 'iqdat'.
     """
 
-    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str, **kwargs):
+    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str):
         """
         Initialize the attributes of the class.
 
@@ -69,10 +67,8 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         """
         super().__init__(infile, outfile, 'antennas_iq', 'bfiq', infile_structure, outfile_structure)
 
-        self.process_file(**kwargs)
-
     @classmethod
-    def process_record(cls, record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         """
         Takes a record from an antennas_iq file and converts it into a bfiq record.
 
@@ -80,8 +76,6 @@ class ProcessAntennasIQ2Bfiq(BaseConvert):
         ----------
         record: OrderedDict
             hdf5 record containing antennas_iq data and metadata
-        averaging_method: Union[None, str]
-            Method to use for averaging correlations across sequences. Unused by this method.
 
         Returns
         -------

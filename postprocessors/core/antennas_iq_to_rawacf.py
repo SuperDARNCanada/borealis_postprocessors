@@ -5,12 +5,11 @@ This file contains functions for converting antennas_iq files
 to rawacf files.
 """
 from collections import OrderedDict
-from typing import Union
 
-from postprocessors import BaseConvert, ProcessAntennasIQ2Bfiq, ProcessBfiq2Rawacf
+from postprocessors import BaseConvert, AntennasIQ2Bfiq, Bfiq2Rawacf
 
 
-class ProcessAntennasIQ2Rawacf(BaseConvert):
+class AntennasIQ2Rawacf(BaseConvert):
     """
     Class for conversion of Borealis antennas_iq files into rawacf files. This class inherits from
     BaseConvert, which handles all functionality generic to postprocessing borealis files.
@@ -19,8 +18,8 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
     --------
     ConvertFile
     BaseConvert
-    ProcessAntennasIQ2Bfiq
-    ProcessBfiq2Rawacf
+    AntennasIQ2Bfiq
+    Bfiq2Rawacf
 
     Attributes
     ----------
@@ -29,15 +28,14 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
     outfile: str
         The file name of output file
     infile_structure: str
-        The write structure of the file. Structures include:
+        The structure of the file. Structures include:
         'array'
         'site'
     outfile_structure: str
         The desired structure of the output file. Same structures as above, plus 'dmap'.
     """
 
-    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
-                 averaging_method: str = 'mean', **kwargs):
+    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str):
         """
         Initialize the attributes of the class.
 
@@ -51,16 +49,11 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
             Borealis structure of input file. Either 'array' or 'site'.
         outfile_structure: str
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
-        averaging_method: str
-            Method for averaging correlations across sequences. Either 'median' or 'mean'.
         """
         super().__init__(infile, outfile, 'antennas_iq', 'rawacf', infile_structure, outfile_structure)
-        self.averaging_method = averaging_method
-
-        self.process_file(**kwargs)
 
     @classmethod
-    def process_record(cls, record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         """
         Takes a record from an antennas_iq file process into a rawacf record.
 
@@ -68,15 +61,13 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
         ----------
         record: OrderedDict
             hdf5 record containing antennas_iq data and metadata
-        averaging_method: Union[None, str]
-            Method to use for averaging correlations across sequences. Acceptable methods are 'median' and 'mean'
 
         Returns
         -------
         record: OrderedDict
             hdf5 record, with new fields required by rawacf data format
         """
-        record = ProcessAntennasIQ2Bfiq.process_record(record, averaging_method)
-        record = ProcessBfiq2Rawacf.process_record(record, averaging_method)
+        record = AntennasIQ2Bfiq.process_record(record, **kwargs)
+        record = Bfiq2Rawacf.process_record(record, **kwargs)
 
         return record

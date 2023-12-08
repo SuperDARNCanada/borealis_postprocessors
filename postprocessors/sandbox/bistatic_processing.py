@@ -8,7 +8,7 @@ from typing import Union
 import h5py
 import numpy as np
 
-from postprocessors import BaseConvert, ProcessAntennasIQ2Rawacf
+from postprocessors import BaseConvert, AntennasIQ2Rawacf
 
 
 class BistaticProcessing(BaseConvert):
@@ -138,6 +138,6 @@ class BistaticProcessing(BaseConvert):
         record['num_sequences'] = np.int64(len(keep_indices))
         record['sqn_timestamps'] = record['sqn_timestamps'][keep_indices]
 
-        record = ProcessAntennasIQ2Rawacf.process_record(record, averaging_method)
+        record = AntennasIQ2Rawacf.process_record(record, averaging_method)
 
         return record

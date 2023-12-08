@@ -3,7 +3,7 @@ import glob
 import os
 from datetime import datetime
 
-from postprocessors import borealis_to_borealis_rename, ProcessBfiq2Rawacf, ProcessAntennasIQ2Bfiq
+from postprocessors import borealis_to_borealis_rename, Bfiq2Rawacf, AntennasIQ2Bfiq
 
 
 def main(in_directory: str, out_directory: str, out_struct: str, search_pattern: str):
@@ -59,14 +59,14 @@ def main(in_directory: str, out_directory: str, out_struct: str, search_pattern:
         elif os.path.isfile(bfiq_path):
             # bfiq already exists
             print(f'{bfiq_path} -> {rawacf_out}  ', end='')
-            ProcessBfiq2Rawacf(bfiq_path, rawacf_out, 'site', out_struct, averaging_method, num_processes=1)
+            Bfiq2Rawacf(bfiq_path, rawacf_out, 'site', out_struct, averaging_method, num_processes=1)
             os.remove(bfiq_path)       # Don't want to keep this around
 
         else:
             print(f'{path} -> {bfiq_path} ', end='')
-            ProcessAntennasIQ2Bfiq(path, bfiq_path, input_structure, 'site', num_processes=1)
+            AntennasIQ2Bfiq(path, bfiq_path, input_structure, 'site', num_processes=1)
             print(f'-> {os.path.basename(rawacf_out)}  ', end='')
-            ProcessBfiq2Rawacf(bfiq_path, rawacf_out, 'site', out_struct, averaging_method, num_processes=1)
+            Bfiq2Rawacf(bfiq_path, rawacf_out, 'site', out_struct, averaging_method, num_processes=1)
 
         end = datetime.utcnow()
         duration = (end - start).total_seconds()

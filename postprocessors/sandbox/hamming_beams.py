@@ -4,14 +4,22 @@
 This file contains functions for converting antennas_iq files from widebeam experiments
 to rawacf files, using a Hamming window in amplitude for beamforming to reduce receiver sidelobes.
 """
-from collections import OrderedDict
 from typing import Union
 import numpy as np
 
-from postprocessors import BaseConvert, ProcessAntennasIQ2Bfiq, ProcessBfiq2Rawacf
+try:
+    import cupy as xp
+except ImportError:
+    import numpy as xp
+
+    cupy_available = False
+else:
+    cupy_available = True
+
+from postprocessors import AntennasIQ2Rawacf, AntennasIQ2Bfiq
 
 
-class HammingWindowBeamforming(BaseConvert):
+class HammingWindowBeamforming(AntennasIQ2Rawacf):
     """
     Class for conversion of Borealis antennas_iq files into rawacf files for beam-broadening experiments. This class
     inherits from BaseConvert, which handles all functionality generic to postprocessing borealis files. The beams
@@ -43,6 +51,10 @@ class HammingWindowBeamforming(BaseConvert):
     beam_nums: list[uint]
         List describing beam order. Numbers in this list correspond to indices of beam_azms
     """
+    hamming_window = [0.08081232549588463, 0.12098514265395757, 0.23455777475180511, 0.4018918165398586,
+                      0.594054435182454, 0.7778186328978896, 0.9214100134552521, 1.0,
+                      1.0, 0.9214100134552521, 0.7778186328978896, 0.594054435182454,
+                      0.4018918165398586, 0.23455777475180511, 0.12098514265395757, 0.08081232549588463]
 
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
                  beam_azms: Union[list, None] = None, beam_nums: Union[list, None] = None):
@@ -64,7 +76,7 @@ class HammingWindowBeamforming(BaseConvert):
         beam_nums: list[uint]
             List describing beam order. Numbers in this list correspond to indices of beam_azms
         """
-        super().__init__(infile, outfile, 'antennas_iq', 'bfiq', infile_structure, outfile_structure)
+        super().__init__(infile, outfile, infile_structure, outfile_structure)
 
         # Use default 16-beam arrangement if no beams are specified
         if beam_azms is None:
@@ -87,39 +99,64 @@ class HammingWindowBeamforming(BaseConvert):
 
         self.process_file(beam_azms=self.beam_azms, beam_nums=self.beam_nums)
 
-    @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    @classmethod
+    def beamform(cls, antennas_data: np.array, beamdirs: np.array, rxfreq: float, ants_in_array: int,
+                 antenna_spacing: float,
+                 antenna_indices: np.array) -> np.array:
         """
-        Takes a record from an antennas_iq file process into a rawacf record.
-        This method also beamforms the antennas_iq data into each of the 16 standard SuperDARN beams,
-        regardless of the beams transmitted, overwriting the fields 'beam_azms' and 'beam_nums'.
+        Beamforms the data from each antenna and sums to create one dataset for each beam direction.
+        Overwrites the implementation in AntennasIQ2Bfiq to use an amplitude taper
 
         Parameters
         ----------
-        record: OrderedDict
-            hdf5 record containing antennas_iq data and metadata
-        averaging_method: Union[None, str]
-            Method to use for averaging correlations across sequences. Acceptable methods are 'median' and 'mean'
+        antennas_data: np.array
+            Numpy array of dimensions num_antennas x num_samps. All antennas are assumed to be from the same array
+            and are assumed to be side by side with uniform antenna spacing
+        beamdirs: np.array
+            Azimuthal beam directions in degrees off boresight
+        rxfreq: float
+            Frequency of the received beam
+        ants_in_array: int
+            Number of physical antennas in the array
+        antenna_spacing: float
+            Spacing in metres between antennas (assumed uniform)
+        antenna_indices: np.array
+            Mapping of antenna channels to physical antennas in the uniformly spaced array.
 
         Returns
         -------
-        record: OrderedDict
-            hdf5 record, with new fields required by rawacf data format
+        beamformed_data: np.array
+            Array of shape [num_beams, num_samps]
         """
-        record['first_range'] = ProcessAntennasIQ2Bfiq.calculate_first_range(record)
-        record['first_range_rtt'] = ProcessAntennasIQ2Bfiq.calculate_first_range_rtt(record)
-        record['lags'] = ProcessAntennasIQ2Bfiq.create_lag_table(record)
-        record['range_sep'] = ProcessAntennasIQ2Bfiq.calculate_range_separation(record)
-        record['num_ranges'] = ProcessAntennasIQ2Bfiq.get_number_of_ranges(record)
+        beamformed_data = []
 
-        record['beam_azms'] = np.float64(kwargs['beam_azms'])
-        record['beam_nums'] = np.uint32(kwargs['beam_nums'])
+        # [num_antennas, num_samps]
+        num_antennas, num_samps = antennas_data.shape
 
-        record['data'] = ProcessAntennasIQ2Bfiq.beamform_data(record)
-        record['data_descriptors'] = ProcessAntennasIQ2Bfiq.get_data_descriptors()
-        record['data_dimensions'] = ProcessAntennasIQ2Bfiq.get_data_dimensions(record)
-        record['antenna_arrays_order'] = ProcessAntennasIQ2Bfiq.change_antenna_arrays_order()
+        # Loop through all beam directions
+        for beam_direction in beamdirs:
+            antenna_phase_shifts = []
 
-        record = ProcessBfiq2Rawacf.process_record(record, averaging_method)
+            # Get phase shift for each antenna
+            for antenna in antenna_indices:
+                phase_shift = AntennasIQ2Bfiq.get_phshift(beam_direction, rxfreq, antenna, ants_in_array,
+                                                          antenna_spacing)
+                # Bring into range (-2*pi, 2*pi)
+                antenna_phase_shifts.append(phase_shift)
 
-        return record
+            # Apply phase shift to data from respective antenna
+            if num_antennas == 16:
+                phased_antenna_data = [AntennasIQ2Bfiq.shift_samples(antennas_data[i], antenna_phase_shifts[i],
+                                                                     cls.hamming_window[i])
+                                       for i in range(num_antennas)]
+            else:
+                phased_antenna_data = [AntennasIQ2Bfiq.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
+                                       for i in range(num_antennas)]
+            phased_antenna_data = xp.array(phased_antenna_data)
+
+            # Sum across antennas to get beamformed data
+            one_beam_data = xp.sum(phased_antenna_data, axis=0)
+            beamformed_data.append(one_beam_data)
+        beamformed_data = xp.array(beamformed_data)
+
+        return beamformed_data
