@@ -8,6 +8,7 @@ from collections import OrderedDict
 from typing import Union
 import numpy as np
 import pywt
+import dtcwt
 
 from postprocessors import BaseConvert
 
@@ -109,5 +110,42 @@ class WaveletDecomposition(BaseConvert):
         record['detail3'] = detail3
         record['detail2'] = detail2
         record['detail1'] = detail1
+
+        # num_antennas, num_sequences, num_samps = record['data_dimensions']
+        # signal = np.reshape(record['data'], record['data_dimensions'])
+        #
+        # transform = dtcwt.Transform1d()
+        #
+        # vecs_t = []
+        # for i in range(num_antennas):
+        #     for j in range(num_sequences):
+        #         vecs = np.array([signal[i, j].real, signal[i, j].imag], dtype=np.float32)
+        #         vecs_t.append(transform.forward(vecs, nlevels=4))
+        #         # print(vecs_t[-1].lowpass.shape, vecs_t[-1].lowpass.dtype)
+        #         # print(vecs_t[-1].highpasses[-1].shape, vecs_t[-1].highpasses[-1].dtype)
+        #
+        # print(vecs_t[0].lowpass.shape)
+        # approx = np.empty((num_antennas, num_sequences, vecs_t[0].lowpass.shape[-1]), dtype=np.complex64)
+        # print('approx shape ', approx.shape)
+        # detail1 = np.empty((num_antennas, num_sequences, vecs_t[0].highpasses[0].shape[-1]), dtype=np.complex64)
+        # detail2 = np.empty((num_antennas, num_sequences, vecs_t[0].highpasses[1].shape[-1]), dtype=np.complex64)
+        # detail3 = np.empty((num_antennas, num_sequences, vecs_t[0].highpasses[2].shape[-1]), dtype=np.complex64)
+        # detail4 = np.empty((num_antennas, num_sequences, vecs_t[0].highpasses[3].shape[-1]), dtype=np.complex64)
+        #
+        # for i, vec in enumerate(vecs_t):
+        #     ant_idx = i // num_sequences
+        #     seq_idx = i % num_sequences
+        #     print('ant_idx ', ant_idx, 'seq_idx ', seq_idx)
+        #     approx[ant_idx, seq_idx] = vec.lowpass[0] + 1j * vec.lowpass[1]
+        #     detail1[ant_idx, seq_idx] = vec.highpasses[0][0]
+        #     detail2[ant_idx, seq_idx] = vec.highpasses[1][0]
+        #     detail3[ant_idx, seq_idx] = vec.highpasses[2][0]
+        #     detail4[ant_idx, seq_idx] = vec.highpasses[3][0]
+        #
+        # record['approx'] = approx
+        # record['detail4'] = detail4
+        # record['detail3'] = detail3
+        # record['detail2'] = detail2
+        # record['detail1'] = detail1
 
         return record
