@@ -59,8 +59,8 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
 
         self.process_file(**kwargs)
 
-    @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    @classmethod
+    def process_record(cls, record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
         """
         Takes a record from an antennas_iq file process into a rawacf record.
 

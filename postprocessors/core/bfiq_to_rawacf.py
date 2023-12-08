@@ -67,8 +67,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
         self.process_file(**kwargs)
 
-    @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    @classmethod
+    def process_record(cls, record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
         """
         Takes a record from a bfiq file and processes it into record for rawacf file.
 
@@ -88,19 +88,19 @@ class ProcessBfiq2Rawacf(BaseConvert):
             averaging_method = 'mean'
         record['averaging_method'] = averaging_method
 
-        correlations = ProcessBfiq2Rawacf.calculate_correlations(record, averaging_method)
+        correlations = cls.calculate_correlations(record, averaging_method)
         record['main_acfs'] = correlations[0]
         record['intf_acfs'] = correlations[1]
         record['xcfs'] = correlations[2]
 
-        record['correlation_descriptors'] = ProcessBfiq2Rawacf.get_correlation_descriptors()
-        record['correlation_dimensions'] = ProcessBfiq2Rawacf.get_correlation_dimensions(record)
-        record = ProcessBfiq2Rawacf.remove_extra_fields(record)
+        record['correlation_descriptors'] = cls.get_correlation_descriptors()
+        record['correlation_dimensions'] = cls.get_correlation_dimensions(record)
+        record = cls.remove_extra_fields(record)
 
         return record
 
-    @staticmethod
-    def calculate_correlations(record: OrderedDict, averaging_method: str) -> tuple:
+    @classmethod
+    def calculate_correlations(cls, record: OrderedDict, averaging_method: str) -> tuple:
         """
         Calculates the auto- and cross-correlations for main and interferometer arrays given the bfiq data in record.
 
@@ -127,13 +127,13 @@ class ProcessBfiq2Rawacf(BaseConvert):
         num_arrays, num_sequences, num_beams, num_samps = record['data_dimensions']
         bfiq_data = bfiq_data.reshape(record['data_dimensions'])
 
-        main_corrs_unavg = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[0, ...],
+        main_corrs_unavg = cls.correlations_from_samples(bfiq_data[0, ...],
                                                                         bfiq_data[0, ...],
                                                                         record)
-        intf_corrs_unavg = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, ...],
+        intf_corrs_unavg = cls.correlations_from_samples(bfiq_data[1, ...],
                                                                         bfiq_data[1, ...],
                                                                         record)
-        cross_corrs_unavg = ProcessBfiq2Rawacf.correlations_from_samples(bfiq_data[1, ...],
+        cross_corrs_unavg = cls.correlations_from_samples(bfiq_data[1, ...],
                                                                          bfiq_data[0, ...],
                                                                          record)
 
@@ -156,8 +156,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
         return main_acfs, intf_acfs, xcfs
 
-    @staticmethod
-    def correlations_from_samples(beamformed_samples_1: np.array, beamformed_samples_2: np.array,
+    @classmethod
+    def correlations_from_samples(cls, beamformed_samples_1: np.array, beamformed_samples_2: np.array,
                                   record: OrderedDict) -> np.array:
         """
         Correlate two sets of beamformed samples together. Correlation matrices are used and
@@ -249,15 +249,15 @@ class ProcessBfiq2Rawacf(BaseConvert):
 
         return values
 
-    @staticmethod
-    def get_correlation_descriptors() -> list:
+    @classmethod
+    def get_correlation_descriptors(cls) -> list:
         """
         Returns a list of descriptors corresponding to correlation data dimensions.
         """
         return ['num_beams', 'num_ranges', 'num_lags']
 
-    @staticmethod
-    def get_correlation_dimensions(record: OrderedDict) -> np.array:
+    @classmethod
+    def get_correlation_dimensions(cls, record: OrderedDict) -> np.array:
         """
         Returns the dimensions of correlation data.
 
@@ -272,8 +272,8 @@ class ProcessBfiq2Rawacf(BaseConvert):
         """
         return np.array([len(record['beam_azms']), record['num_ranges'], len(record['lags'])], dtype=np.uint32)
 
-    @staticmethod
-    def remove_extra_fields(record: OrderedDict) -> OrderedDict:
+    @classmethod
+    def remove_extra_fields(cls, record: OrderedDict) -> OrderedDict:
         """
         Removes fields not needed by the rawacf data format.
 

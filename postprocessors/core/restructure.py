@@ -42,7 +42,10 @@ def read_group(group: h5py.Group):
         if k in ['CLASS', 'TITLE', 'VERSION', 'DEEPDISH_IO_VERSION', 'PYTABLES_FORMAT_VERSION']:
             continue
         elif isinstance(v, np.bytes_):
-            attribute_dict[k] = v.tobytes().decode('utf-8')
+            if v.itemsize == 0:
+                attribute_dict[k] = ''
+            else:
+                attribute_dict[k] = v.tobytes().decode('utf-8')
         elif isinstance(v, h5py.Empty):
             dtype = v.dtype.type
             data = dtype()
@@ -70,34 +73,17 @@ def write_records(hdf5_file: h5py.File, records: dict):
     for group_name, group_dict in records.items():
         group = hdf5_file.create_group(str(group_name))
         for k, v in group_dict.items():
-            array_field = False
             if isinstance(v, str):
-                data = np.bytes_(v)
-            elif isinstance(v, bool):
-                data = np.bool_(v)
-            elif isinstance(v, list):
-                if isinstance(v[0], str):
-                    data = np.bytes_(v)
-                else:
-                    data = np.array(v)
-                array_field = True
+                group.attrs[k] = np.bytes_(v)
             elif isinstance(v, np.ndarray):
-                if isinstance(v[0], str):
+                if v.dtype.type == np.str_:
                     dset = group.create_dataset(k, data=v.view(dtype=np.uint8))
                     dset.attrs['strtype'] = b'unicode'
                     dset.attrs['itemsize'] = v.dtype.itemsize // 4  # every character is 4 bytes
-                    continue
                 else:
-                    data = v
-                array_field = True
+                    group.create_dataset(k, data=v)
             else:
-                data = v
-
-            # Store in the file appropriately
-            if array_field:
-                group.create_dataset(k, data=data)
-            else:
-                group.attrs[k] = data
+                group.attrs[k] = v
 
 
 def restructure(infile_name, outfile_name, infile_type, infile_structure, outfile_structure):
