@@ -263,8 +263,8 @@ class BaseConvert(object):
             if os.path.exists(filename):
                 os.remove(filename)
 
-    @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    @classmethod
+    def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         """
         This method should be overwritten by child classes, and should contain the necessary
         steps to process a record of input type to output type.
@@ -273,8 +273,6 @@ class BaseConvert(object):
         ----------
         record: OrderedDict
             An hdf5 group containing one record of site-structured data
-        averaging_method: Union[None, str]
-            Method to use for averaging correlations across sequences.
 
         Returns
         -------

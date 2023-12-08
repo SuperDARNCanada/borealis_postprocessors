@@ -9,7 +9,7 @@ from collections import OrderedDict
 from postprocessors import BaseConvert, AntennasIQ2Bfiq, Bfiq2Rawacf
 
 
-class AntennasIQ2Rawacf(BaseConvert):
+class AntennasIQ2Rawacf(AntennasIQ2Bfiq, Bfiq2Rawacf):
     """
     Class for conversion of Borealis antennas_iq files into rawacf files. This class inherits from
     BaseConvert, which handles all functionality generic to postprocessing borealis files.
@@ -50,7 +50,7 @@ class AntennasIQ2Rawacf(BaseConvert):
         outfile_structure: str
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
         """
-        super().__init__(infile, outfile, 'antennas_iq', 'rawacf', infile_structure, outfile_structure)
+        BaseConvert.__init__(self, infile, outfile, 'antennas_iq', 'rawacf', infile_structure, outfile_structure)
 
     @classmethod
     def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
@@ -67,7 +67,7 @@ class AntennasIQ2Rawacf(BaseConvert):
         record: OrderedDict
             hdf5 record, with new fields required by rawacf data format
         """
-        record = AntennasIQ2Bfiq.process_record(record, **kwargs)
+        record = super().process_record(record, **kwargs)   # This calls AntennasIQ2Bfiq.process_record()
         record = Bfiq2Rawacf.process_record(record, **kwargs)
 
         return record
