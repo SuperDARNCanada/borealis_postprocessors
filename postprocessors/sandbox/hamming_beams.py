@@ -7,15 +7,6 @@ to rawacf files, using a Hamming window in amplitude for beamforming to reduce r
 from typing import Union
 import numpy as np
 
-try:
-    import cupy as xp
-except ImportError:
-    import numpy as xp
-
-    cupy_available = False
-else:
-    cupy_available = True
-
 from postprocessors import AntennasIQ2Rawacf, AntennasIQ2Bfiq
 
 
@@ -51,10 +42,10 @@ class HammingWindowBeamforming(AntennasIQ2Rawacf):
     beam_nums: list[uint]
         List describing beam order. Numbers in this list correspond to indices of beam_azms
     """
-    hamming_window = [0.08081232549588463, 0.12098514265395757, 0.23455777475180511, 0.4018918165398586,
-                      0.594054435182454, 0.7778186328978896, 0.9214100134552521, 1.0,
-                      1.0, 0.9214100134552521, 0.7778186328978896, 0.594054435182454,
-                      0.4018918165398586, 0.23455777475180511, 0.12098514265395757, 0.08081232549588463]
+    window = [0.08081232549588463, 0.12098514265395757, 0.23455777475180511, 0.4018918165398586,
+              0.594054435182454, 0.7778186328978896, 0.9214100134552521, 1.0,
+              1.0, 0.9214100134552521, 0.7778186328978896, 0.594054435182454,
+              0.4018918165398586, 0.23455777475180511, 0.12098514265395757, 0.08081232549588463]
 
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
                  beam_azms: Union[list, None] = None, beam_nums: Union[list, None] = None):
@@ -147,16 +138,16 @@ class HammingWindowBeamforming(AntennasIQ2Rawacf):
             # Apply phase shift to data from respective antenna
             if num_antennas == 16:
                 phased_antenna_data = [AntennasIQ2Bfiq.shift_samples(antennas_data[i], antenna_phase_shifts[i],
-                                                                     cls.hamming_window[i])
+                                                                     cls.window[i])
                                        for i in range(num_antennas)]
             else:
                 phased_antenna_data = [AntennasIQ2Bfiq.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
                                        for i in range(num_antennas)]
-            phased_antenna_data = xp.array(phased_antenna_data)
+            phased_antenna_data = np.array(phased_antenna_data)
 
             # Sum across antennas to get beamformed data
-            one_beam_data = xp.sum(phased_antenna_data, axis=0)
+            one_beam_data = np.sum(phased_antenna_data, axis=0)
             beamformed_data.append(one_beam_data)
-        beamformed_data = xp.array(beamformed_data)
+        beamformed_data = np.array(beamformed_data)
 
         return beamformed_data
