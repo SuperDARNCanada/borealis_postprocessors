@@ -67,7 +67,7 @@ class AntennasIQ2Rawacf(AntennasIQ2Bfiq, Bfiq2Rawacf):
         record: OrderedDict
             hdf5 record, with new fields required by rawacf data format
         """
-        record = super().process_record(record, **kwargs)   # This calls AntennasIQ2Bfiq.process_record()
-        record = Bfiq2Rawacf.process_record(record, **kwargs)
+        record = super(AntennasIQ2Rawacf, cls).process_record(record, **kwargs) # Calls AntennasIQ2Bfiq.process_record()
+        record = super(AntennasIQ2Bfiq, cls).process_record(record, **kwargs)   # Calls Bfiq2Rawacf.process_record()
 
         return record

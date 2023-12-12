@@ -40,6 +40,7 @@ class AntennasIQ2Bfiq(BaseConvert):
     outfile_structure: str
         The desired structure of the output file. Same structures as above, plus 'iqdat'.
     """
+    window = [1.0] * 16
 
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str):
         """
@@ -185,8 +186,12 @@ class AntennasIQ2Bfiq(BaseConvert):
                 antenna_phase_shifts.append(phase_shift)
 
             # Apply phase shift to data from respective antenna
-            phased_antenna_data = [cls.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
-                                   for i in range(num_antennas)]
+            if num_antennas == 16:
+                phased_antenna_data = [cls.shift_samples(antennas_data[i], antenna_phase_shifts[i], cls.window[i])
+                                       for i in range(num_antennas)]
+            else:
+                phased_antenna_data = [cls.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
+                                       for i in range(num_antennas)]
             phased_antenna_data = np.array(phased_antenna_data)
 
             # Sum across antennas to get beamformed data

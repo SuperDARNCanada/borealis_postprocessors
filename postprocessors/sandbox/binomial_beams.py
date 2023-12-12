@@ -42,6 +42,7 @@ class BinomialWindowBeamforming(HammingWindowBeamforming):
               0.21212121212121213, 0.4666666666666667, 0.7777777777777778, 1.0,
               1.0, 0.7777777777777778, 0.4666666666666667, 0.21212121212121213,
               0.0707070707070707, 0.016317016317016316, 0.002331002331002331, 0.0001554001554001554]
+
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
                  beam_azms: Union[list, None] = None, beam_nums: Union[list, None] = None):
         """

@@ -5,9 +5,8 @@ This file contains functions for converting antennas_iq files from widebeam expe
 to rawacf files, using a Hamming window in amplitude for beamforming to reduce receiver sidelobes.
 """
 from typing import Union
-import numpy as np
 
-from postprocessors import AntennasIQ2Rawacf, AntennasIQ2Bfiq
+from postprocessors import AntennasIQ2Rawacf
 
 
 class HammingWindowBeamforming(AntennasIQ2Rawacf):
@@ -32,7 +31,7 @@ class HammingWindowBeamforming(AntennasIQ2Rawacf):
     outfile: str
         The file name of output file
     infile_structure: str
-        The write structure of the file. Structures include:
+        The structure of the file. Structures include:
         'array'
         'site'
     outfile_structure: str
@@ -89,65 +88,3 @@ class HammingWindowBeamforming(AntennasIQ2Rawacf):
                 self.beam_nums = beam_nums
 
         self.process_file(beam_azms=self.beam_azms, beam_nums=self.beam_nums)
-
-    @classmethod
-    def beamform(cls, antennas_data: np.array, beamdirs: np.array, rxfreq: float, ants_in_array: int,
-                 antenna_spacing: float,
-                 antenna_indices: np.array) -> np.array:
-        """
-        Beamforms the data from each antenna and sums to create one dataset for each beam direction.
-        Overwrites the implementation in AntennasIQ2Bfiq to use an amplitude taper
-
-        Parameters
-        ----------
-        antennas_data: np.array
-            Numpy array of dimensions num_antennas x num_samps. All antennas are assumed to be from the same array
-            and are assumed to be side by side with uniform antenna spacing
-        beamdirs: np.array
-            Azimuthal beam directions in degrees off boresight
-        rxfreq: float
-            Frequency of the received beam
-        ants_in_array: int
-            Number of physical antennas in the array
-        antenna_spacing: float
-            Spacing in metres between antennas (assumed uniform)
-        antenna_indices: np.array
-            Mapping of antenna channels to physical antennas in the uniformly spaced array.
-
-        Returns
-        -------
-        beamformed_data: np.array
-            Array of shape [num_beams, num_samps]
-        """
-        beamformed_data = []
-
-        # [num_antennas, num_samps]
-        num_antennas, num_samps = antennas_data.shape
-
-        # Loop through all beam directions
-        for beam_direction in beamdirs:
-            antenna_phase_shifts = []
-
-            # Get phase shift for each antenna
-            for antenna in antenna_indices:
-                phase_shift = AntennasIQ2Bfiq.get_phshift(beam_direction, rxfreq, antenna, ants_in_array,
-                                                          antenna_spacing)
-                # Bring into range (-2*pi, 2*pi)
-                antenna_phase_shifts.append(phase_shift)
-
-            # Apply phase shift to data from respective antenna
-            if num_antennas == 16:
-                phased_antenna_data = [AntennasIQ2Bfiq.shift_samples(antennas_data[i], antenna_phase_shifts[i],
-                                                                     cls.window[i])
-                                       for i in range(num_antennas)]
-            else:
-                phased_antenna_data = [AntennasIQ2Bfiq.shift_samples(antennas_data[i], antenna_phase_shifts[i], 1.0)
-                                       for i in range(num_antennas)]
-            phased_antenna_data = np.array(phased_antenna_data)
-
-            # Sum across antennas to get beamformed data
-            one_beam_data = np.sum(phased_antenna_data, axis=0)
-            beamformed_data.append(one_beam_data)
-        beamformed_data = np.array(beamformed_data)
-
-        return beamformed_data
