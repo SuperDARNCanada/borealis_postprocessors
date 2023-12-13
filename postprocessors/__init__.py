@@ -10,9 +10,9 @@ from .exceptions import processing_exceptions
 
 # The main processing classes
 from .core.convert_base import BaseConvert
-from .core.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
-from .core.bfiq_to_rawacf import ProcessBfiq2Rawacf
-from .core.antennas_iq_to_rawacf import ProcessAntennasIQ2Rawacf
+from .core.antennas_iq_to_bfiq import AntennasIQ2Bfiq
+from .core.bfiq_to_rawacf import Bfiq2Rawacf
+from .core.antennas_iq_to_rawacf import AntennasIQ2Rawacf
 from .core.conversion import ConvertFile
 
 # Helpful for scripts

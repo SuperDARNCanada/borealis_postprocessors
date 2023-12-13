@@ -1,8 +1,7 @@
 # Copyright 2021 SuperDARN Canada, University of Saskatchewan
 # Author: Remington Rohel
 """
-This file contains functions for converting antennas_iq files
-to bfiq files.
+This file contains base functionality for postprocessing of Borealis data files.
 """
 import os
 import traceback
@@ -28,8 +27,7 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int,
-                       averaging_method: str, processing_fn, **kwargs):
+def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, processing_fn, **kwargs):
     """
     Helper function for processing a single record. It is defined here to facilitate multiprocessing.
 
@@ -43,8 +41,6 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         List of all top-level keys of the HDF5 file.
     records_per_process: int
         Number of records to process per call to this function.
-    averaging_method: str
-        Method for averaging rawacf data. Either 'mean' or 'median'
     processing_fn: callable
         Function to call to process a record.
     kwargs: dict
@@ -63,7 +59,7 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
             for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
                 record_list.append(rs.read_group(hdf5_file[record_keys[num]]))
 
-    processed_record = processing_fn(record_dict, averaging_method, extra_records=record_list, **kwargs)
+    processed_record = processing_fn(record_dict, extra_records=record_list, **kwargs)
 
     if processed_record is None:
         return None, idx
@@ -100,7 +96,7 @@ class BaseConvert(object):
     outfile_type: str
         Desired type of output data file. Same types as above.
     infile_structure: str
-        The write structure of the file. Structures include:
+        The structure of the file. Structures include:
         'array'
         'site'
         'iqdat' (bfiq only)
@@ -174,15 +170,10 @@ class BaseConvert(object):
         Applies appropriate downstream processing to convert between file types (for site-structured
         files only). The processing chain is as follows:
         1. Restructure to site format
-        2. Apply appropriate downstream processing
+        2. Apply appropriate downstream processing by calling process_record() on each record
         3. Restructure to final format
         4. Remove all intermediate files created along the way
 
-        See Also
-        --------
-        ProcessAntennasIQ2Bfiq
-        ProcessAntennasIQ2Rawacf
-        ProcessBfiq2Rawacf
         """
 
         if os.path.isfile(self.outfile) and not kwargs.get('force', False):
@@ -237,7 +228,6 @@ class BaseConvert(object):
                 function_to_call = partial(processing_machine,
                                            filename=file_to_process, record_keys=all_records,
                                            records_per_process=records_per_process,
-                                           averaging_method=self.averaging_method,
                                            processing_fn=self.process_record, **kwargs)
                 print()     # Put the progress bar on a newline
 
@@ -273,8 +263,8 @@ class BaseConvert(object):
             if os.path.exists(filename):
                 os.remove(filename)
 
-    @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    @classmethod
+    def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         """
         This method should be overwritten by child classes, and should contain the necessary
         steps to process a record of input type to output type.
@@ -283,8 +273,6 @@ class BaseConvert(object):
         ----------
         record: OrderedDict
             An hdf5 group containing one record of site-structured data
-        averaging_method: Union[None, str]
-            Method to use for averaging correlations across sequences.
 
         Returns
         -------

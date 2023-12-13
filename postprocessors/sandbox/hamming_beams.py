@@ -2,19 +2,19 @@
 
 """
 This file contains functions for converting antennas_iq files from widebeam experiments
-to bfiq files.
+to rawacf files, using a Hamming window in amplitude for beamforming to reduce receiver sidelobes.
 """
-from collections import OrderedDict
 from typing import Union
-import numpy as np
 
-from postprocessors import BaseConvert, AntennasIQ2Bfiq
+from postprocessors import AntennasIQ2Rawacf
 
 
-class WidebeamAntennasIQ2Bfiq(BaseConvert):
+class HammingWindowBeamforming(AntennasIQ2Rawacf):
     """
     Class for conversion of Borealis antennas_iq files into rawacf files for beam-broadening experiments. This class
-    inherits from BaseConvert, which handles all functionality generic to postprocessing borealis files.
+    inherits from BaseConvert, which handles all functionality generic to postprocessing borealis files. The beams
+    are formed using a Hamming window and standard beamforming, to keep the largest sidelobe down 40 dB below the
+    main lobe.
 
     See Also
     --------
@@ -31,7 +31,7 @@ class WidebeamAntennasIQ2Bfiq(BaseConvert):
     outfile: str
         The file name of output file
     infile_structure: str
-        The write structure of the file. Structures include:
+        The structure of the file. Structures include:
         'array'
         'site'
     outfile_structure: str
@@ -41,6 +41,10 @@ class WidebeamAntennasIQ2Bfiq(BaseConvert):
     beam_nums: list[uint]
         List describing beam order. Numbers in this list correspond to indices of beam_azms
     """
+    window = [0.08081232549588463, 0.12098514265395757, 0.23455777475180511, 0.4018918165398586,
+              0.594054435182454, 0.7778186328978896, 0.9214100134552521, 1.0,
+              1.0, 0.9214100134552521, 0.7778186328978896, 0.594054435182454,
+              0.4018918165398586, 0.23455777475180511, 0.12098514265395757, 0.08081232549588463]
 
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str,
                  beam_azms: Union[list, None] = None, beam_nums: Union[list, None] = None):
@@ -62,7 +66,7 @@ class WidebeamAntennasIQ2Bfiq(BaseConvert):
         beam_nums: list[uint]
             List describing beam order. Numbers in this list correspond to indices of beam_azms
         """
-        super().__init__(infile, outfile, 'antennas_iq', 'bfiq', infile_structure, outfile_structure)
+        super().__init__(infile, outfile, infile_structure, outfile_structure)
 
         # Use default 16-beam arrangement if no beams are specified
         if beam_azms is None:
@@ -84,38 +88,3 @@ class WidebeamAntennasIQ2Bfiq(BaseConvert):
                 self.beam_nums = beam_nums
 
         self.process_file(beam_azms=self.beam_azms, beam_nums=self.beam_nums)
-
-    @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
-        """
-        Takes a record from an antennas_iq file process into a bfiq record.
-        This method also beamforms the antennas_iq data into each of the 16 standard SuperDARN beams,
-        regardless of the beams transmitted, overwriting the fields 'beam_azms' and 'beam_nums'.
-
-        Parameters
-        ----------
-        record: OrderedDict
-            hdf5 record containing antennas_iq data and metadata
-        averaging_method: Union[None, str]
-            Method to use for averaging correlations across sequences. Acceptable methods are 'median' and 'mean'
-
-        Returns
-        -------
-        record: OrderedDict
-            hdf5 record, with new fields required by rawacf data format
-        """
-        record['first_range'] = AntennasIQ2Bfiq.calculate_first_range(record)
-        record['first_range_rtt'] = AntennasIQ2Bfiq.calculate_first_range_rtt(record)
-        record['lags'] = AntennasIQ2Bfiq.create_lag_table(record)
-        record['range_sep'] = AntennasIQ2Bfiq.calculate_range_separation(record)
-        record['num_ranges'] = AntennasIQ2Bfiq.get_number_of_ranges(record)
-
-        record['beam_azms'] = np.float64(kwargs['beam_azms'])
-        record['beam_nums'] = np.uint32(kwargs['beam_nums'])
-
-        record['data'] = AntennasIQ2Bfiq.beamform_data(record)
-        record['data_descriptors'] = AntennasIQ2Bfiq.get_data_descriptors()
-        record['data_dimensions'] = AntennasIQ2Bfiq.get_data_dimensions(record)
-        record['antenna_arrays_order'] = AntennasIQ2Bfiq.change_antenna_arrays_order()
-
-        return record

@@ -6,7 +6,7 @@ import deepdish as dd
 from datetime import datetime
 
 from postprocessors import ConvertFile, borealis_to_borealis_rename
-from postprocessors.sandbox.widebeam_antennas_iq_to_bfiq import ProcessWidebeamAntennasIQ2Bfiq
+from postprocessors.sandbox.widebeam_antennas_iq_to_bfiq import WidebeamAntennasIQ2Bfiq
 from postprocessors.sandbox.bistatic_processing import BistaticProcessing
 
 
@@ -84,7 +84,7 @@ def main(in_directory: str, out_directory: str, out_struct: str, search_pattern:
 
             if experiment_name in ['Widebeam_2tx', 'Widebeam_3tx', 'MultifreqWidebeam']:    # These ones need some love
                 print(f'{path} -> {rawacf_out}  ', end='')
-                ProcessWidebeamAntennasIQ2Bfiq(path, bfiq_path, input_structure, 'site')
+                WidebeamAntennasIQ2Bfiq(path, bfiq_path, input_structure, 'site')
                 ConvertFile(bfiq_path, rawacf_out, 'bfiq', 'rawacf', 'site', out_struct, averaging_method)
                 os.remove(bfiq_path)    # We don't need to keep these around
 

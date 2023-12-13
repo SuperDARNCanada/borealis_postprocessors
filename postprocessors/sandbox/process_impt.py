@@ -8,7 +8,7 @@ from typing import Union
 
 import numpy as np
 
-from postprocessors import BaseConvert, ProcessBfiq2Rawacf
+from postprocessors import BaseConvert, Bfiq2Rawacf
 
 
 class ProcessIMPT(BaseConvert):
@@ -101,6 +101,6 @@ class ProcessIMPT(BaseConvert):
                             [0, 24],
                             [43, 43]]
         record['lags'] = np.array(STD_8P_LAG_TABLE, dtype=np.uint32)
-        record = ProcessBfiq2Rawacf.process_record(record, averaging_method)
+        record = Bfiq2Rawacf.process_record(record, averaging_method)
 
         return record
