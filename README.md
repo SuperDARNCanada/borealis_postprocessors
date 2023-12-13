@@ -7,12 +7,11 @@ The file conversion.py contains the top-level functionality, and is the only fil
 files. The usage is as follows:
 
 ```
-$ python3 conversion.py [-h] infile outfile infile_type outfile_type infile_structure outfile_structure [--averaging-method a]
+$ python3 conversion.py [-h] infile outfile infile_type outfile_type infile_structure outfile_structure
 ```
 
 Pass in the filename you wish to convert, the filename you wish to save as, and the types and structures of both.
 The script will convert the input file into an output file of type "outfile_type" and structure "outfile_structure".
-If the final type is rawacf, the averaging method may optionally be specified as well. 
 
 If using this package from a python script, the usage is similar. Import `ConvertFile` into your script, then
 initialize an instance of `ConvertFile` and all the conversion and processing will be done automatically. The usage for 
@@ -21,8 +20,7 @@ this method is as follows:
 ```python3
 import postprocessors as pp
 
-pp.ConvertFile(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure,
-               averaging_method=averaging_method)
+pp.ConvertFile(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure)
 ```
 
 ### Defining your own processing method
@@ -41,6 +39,7 @@ class CustomProcessing(BaseConvert):
     """
     Custom class for processing SuperDARN Borealis files.
     """
+    # You can add class variables here, that will be accessible within process_record().
 
     def __init__(self, infile: str, outfile: str, infile_type: str, outfile_type: str, infile_structure: str, 
                  outfile_structure: str, **kwargs):
@@ -63,14 +62,17 @@ class CustomProcessing(BaseConvert):
         outfile_structure: str
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
         """
+        # This call will check if infile is `array` structured, and if so, restructure it to `site` structure.
+        # This ensures that all data from an integration time is collected into one 'record', which is passed
+        # to process_record() within process_file()
         super().__init__(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure)
 
         # You can pass extras parameters needed for process_record() as kwargs
 
         self.process_file(**kwargs)
 
-    @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
+    @classmethod
+    def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         """
         Takes a record from a data file and processes it.
         This method is called from within self.process_file() above, and handles the processing of one record
@@ -79,16 +81,14 @@ class CustomProcessing(BaseConvert):
         Parameters
         ----------
         record: OrderedDict
-            hdf5 record containing antennas_iq data and metadata
-        averaging_method: Union[None, str]
-            Method to use for averaging correlations across sequences. Acceptable methods are 'median' and 'mean'
+            hdf5 group containing data and metadata, from infile
         kwargs: dict
             Whatever you need to do your processing!
             
         Returns
         -------
         record: OrderedDict
-            hdf5 record, with new fields required by output data type
+            Whatever you want to store in your file!
         """
         # do your processing here
         return record
@@ -100,9 +100,8 @@ class CustomProcessing(BaseConvert):
 Contains the data processing chain, for all processing stages. 
 
 #### core
-The main classes in this module are BaseConvert, ProcessAntennasIQ2Bfiq, ProcessBfiq2Rawacf, and
-ProcessAntennasIQ2Rawacf, and ConvertFile. These classes handle their respective processing between data levels. 
-Additionally, BaseConvert handles restructuring between file structures, using pyDARNio.
+The main classes in this module are BaseConvert, AntennasIQ2Bfiq, Bfiq2Rawacf, AntennasIQ2Rawacf, and ConvertFile. 
+These classes handle their respective processing between data levels. Additionally, BaseConvert handles restructuring between file structures, using pyDARNio.
 
 #### exceptions
 Contains all exceptions that the package will throw. 
