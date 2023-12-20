@@ -102,7 +102,7 @@ class ConvertFile(object):
             )
 
         self._converter = self.get_converter()
-        if not isinstance(self._converter, BaseConvert):
+        if self._converter.__class__ != BaseConvert:
             self._converter.process_file(**kwargs)
 
     def get_converter(self):

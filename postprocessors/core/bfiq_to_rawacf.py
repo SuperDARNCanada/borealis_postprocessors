@@ -78,8 +78,13 @@ class Bfiq2Rawacf(BaseConvert):
         record['intf_acfs'] = correlations[1]
         record['xcfs'] = correlations[2]
 
-        record['correlation_descriptors'] = cls.get_correlation_descriptors()
-        record['correlation_dimensions'] = cls.get_correlation_dimensions(record)
+        githash = record['borealis_git_hash'].split('-')[0].strip('v').split('.')  # v0.6.1-xxxxxx -> ['0', '6', '1']
+        if githash[0] == '0' and int(githash[1]) < 7:
+            record['correlation_descriptors'] = cls.get_correlation_descriptors()
+            record['correlation_dimensions'] = cls.get_correlation_dimensions(record)
+        else:
+            record['data_descriptors'] = np.bytes_(cls.get_correlation_descriptors())
+            record['data_dimensions'] = cls.get_correlation_dimensions(record)
         record = cls.remove_extra_fields(record)
 
         return record
@@ -267,8 +272,11 @@ class Bfiq2Rawacf(BaseConvert):
             hdf5 record without fields that aren't in the rawacf format
         """
         record.pop('data')
-        record.pop('data_descriptors')
-        record.pop('data_dimensions')
+
+        githash = record['borealis_git_hash'].split('-')[0].strip('v').split('.')  # v0.6.1-xxxxxx -> ['0', '6', '1']
+        if githash[0] == '0' and int(githash[1]) < 7:
+            record.pop('data_descriptors')
+            record.pop('data_dimensions')
         record.pop('num_ranges')
         record.pop('num_samps')
         record.pop('pulse_phase_offset')

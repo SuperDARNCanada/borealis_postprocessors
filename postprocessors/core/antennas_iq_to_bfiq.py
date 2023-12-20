@@ -120,7 +120,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         main_antenna_spacing = radar_dict[station]['main_antenna_spacing']
         intf_antenna_spacing = radar_dict[station]['intf_antenna_spacing']
 
-        antenna_indices = np.array([int(i.split('_')[-1]) for i in record['antenna_arrays_order']])
+        antenna_indices = np.array([int(i.decode('utf-8').split('_')[-1]) for i in record['antenna_arrays_order']])
         main_antenna_indices = np.array([i for i in antenna_indices if i < main_antenna_count])
         intf_antenna_indices = np.array([i - main_antenna_count for i in antenna_indices if i >= main_antenna_count])
 
