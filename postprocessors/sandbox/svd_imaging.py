@@ -193,13 +193,29 @@ class SVDImaging(AntennasIQ2Rawacf):
         lags = np.array(lags)
         num_lags = lags.shape[0]
 
+        # Create all the visibilities by multiplying samples for each antenna
         visibilities = np.zeros((num_antennas, num_antennas, num_sequences, num_lags, num_ranges),
                                 dtype=np.complex64)
-        for l in range(lags.shape[0]):
-            visibilities[..., l, :] = np.einsum('asr,bsr->absr',     # antenna sequence range x antenna sequence range
-                                                data_for_pulses[..., lags[l, 0], :],
-                                                data_for_pulses[..., lags[l, 1], :].conj())
-        
+        for i in range(lags.shape[0]):
+            visibilities[..., i, :] = np.einsum('asr,bsr->absr',     # antenna sequence range x antenna sequence range
+                                                data_for_pulses[..., lags[i, 0], :],
+                                                data_for_pulses[..., lags[i, 1], :].conj())
+
+        # Blank out range/lag combinations that are coincident with transmission
+        range_lag_mask = np.zeros_like(visibilities, dtype=bool)
+        # [num_pulses, num_ranges]
+        for i, pulse_indices in enumerate(lags.tolist()):
+            _, pulse_0_idx, _ = np.intersect1d(range_for_pulses[pulse_indices[0]], pulses_in_samples,
+                                               return_indices=True)
+            _, pulse_1_idx, _ = np.intersect1d(range_for_pulses[pulse_indices[1]], pulses_in_samples,
+                                               return_indices=True)
+            bad_ranges = np.union1d(pulse_0_idx, pulse_1_idx)
+            range_lag_mask[..., i, bad_ranges] = True
+
+        # Calculate noise for each range and lag, by taking stddev over baselines of median over sequences
+        # TODO: Median real and imag separately?
+        noise = np.median(np.ma.std(np.ma.array(visibilities, mask=range_lag_mask), axis=2).data, axis=(0, 1))
+
         # Average the baselines that are redundant
         # [num_unique_baselines, num_sequences, num_lags, num_ranges]
         unique_visibilities = np.zeros((len(self.unique_baselines.keys()), num_sequences, num_lags, num_ranges),
@@ -212,10 +228,6 @@ class SVDImaging(AntennasIQ2Rawacf):
             # then calculate the median over the redundant baselines
             unique_visibilities[i] = (np.median(visibilities[first_indices, second_indices].real, axis=0) +
                                       1j * np.median(visibilities[first_indices, second_indices].imag, axis=0))
-
-        # Calculate noise for each range and lag, by taking stddev over baselines of median over sequences
-        # TODO: Median real and imag separately?
-        noise = np.std(np.median(unique_visibilities[1:, :, 1:, :], axis=1), axis=0)
 
         # Average the visibilities across the pulse sequences
         # [num_unique_baselines, num_lags, num_ranges]
