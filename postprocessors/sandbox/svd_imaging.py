@@ -211,10 +211,14 @@ class SVDImaging(AntennasIQ2Rawacf):
                                                return_indices=True)
             bad_ranges = np.union1d(pulse_0_idx, pulse_1_idx)
             range_lag_mask[..., i, bad_ranges] = True
-
+        # Don't average over lag 0
+        range_lag_mask[..., 0, :] = True
+        range_lag_mask[..., -1, :] = True
+        # Don't average over the zero baselines
+        range_lag_mask[[i for i in range(num_antennas)], [i for i in range(num_antennas)]] = True
         # Calculate noise for each range and lag, by taking stddev over baselines of median over sequences
         # TODO: Median real and imag separately?
-        noise = np.median(np.ma.std(np.ma.array(visibilities, mask=range_lag_mask), axis=2).data, axis=(0, 1))
+        noise = np.ma.std(np.ma.median(np.ma.array(visibilities, mask=range_lag_mask), axis=2), axis=(0, 1))
 
         # Average the baselines that are redundant
         # [num_unique_baselines, num_sequences, num_lags, num_ranges]
@@ -257,6 +261,7 @@ class SVDImaging(AntennasIQ2Rawacf):
         brightness = np.einsum('rbv,vlr->rlb', reverse_matrix, avg_visibilities)
 
         record['data'] = brightness
+        record['raw_visibilities'] = visibilities
         record['noise'] = noise
         record['s_inv'] = s_inv
         record['directions'] = self.angles
