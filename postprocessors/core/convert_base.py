@@ -224,13 +224,12 @@ class BaseConvert(object):
             num_completed = first_idx
             indices = range(first_idx, len(all_records), records_per_process)
 
-            with get_context("spawn").Pool(kwargs.get('num_processes', 5)) as p:
-                function_to_call = partial(processing_machine,
-                                           filename=file_to_process, record_keys=all_records,
-                                           records_per_process=records_per_process,
-                                           processing_fn=self.process_record, **kwargs)
-                print()     # Put the progress bar on a newline
+            function_to_call = partial(processing_machine,
+                                       filename=file_to_process, record_keys=all_records,
+                                       records_per_process=records_per_process,
+                                       processing_fn=self.process_record, **kwargs)
 
+            with get_context("spawn").Pool(kwargs.get('num_processes', 5)) as p:
                 with h5py.File(processed_file, 'a') as outfile:
                     for completed_record, i in p.imap(function_to_call, indices):
                         num_completed += 1
