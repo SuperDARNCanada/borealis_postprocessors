@@ -4,8 +4,6 @@
 This file contains functions for converting antennas_iq files from widebeam experiments
 to rawacf files, using a Hamming window in amplitude for beamforming to reduce receiver sidelobes.
 """
-from typing import Union
-
 from postprocessors import AntennasIQ2Rawacf
 
 
@@ -56,10 +54,6 @@ class HammingWindowBeamforming(AntennasIQ2Rawacf):
             Borealis structure of input file. Either 'array' or 'site'.
         outfile_structure: str
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
-        beam_azms: list[float]
-            List of all beam directions (in degrees) to reprocess into
-        beam_nums: list[uint]
-            List describing beam order. Numbers in this list correspond to indices of beam_azms
         """
         super().__init__(infile, outfile, infile_structure, outfile_structure)
 
