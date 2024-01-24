@@ -206,7 +206,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         return beamformed_data
 
     @classmethod
-    def get_phshift(cls, beamdir: float, freq: float, antenna: int, num_antennas: int, antenna_spacing: float,
+    def get_phshift(cls, beamdir: float, freq_khz: float, antenna: int, num_antennas: int, antenna_spacing: float,
                     centre_offset: int = 0.0) -> float:
         """
         Find the phase shift for a given antenna and beam direction.
@@ -219,7 +219,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         beamdir: float
             The azimuthal direction of the beam off boresight, in degrees, positive beamdir being to
             the right of the boresight (looking along boresight from ground). This is for this antenna.
-        freq: float
+        freq_khz: float
             Transmit frequency in kHz
         antenna: int
             Antenna number, INDEXED FROM ZERO, zero being the leftmost antenna if looking down the boresight
@@ -238,17 +238,24 @@ class AntennasIQ2Bfiq(BaseConvert):
         phshift: float
             A phase shift for the samples for this antenna number, in radians.
         """
-        freq = freq * 1000.0  # convert to Hz.
+        freq_hz = freq_khz * 1000.0  # convert to Hz
+        k = 2 * np.pi * freq_hz / speed_of_light        # 2pi / wavelength
 
-        # Convert to radians
+        # Convert to radians CW of boresight direction
         beamrad = np.pi * np.float64(beamdir) / 180.0
 
-        # Pointing to right of boresight, use point in middle (hypothetically antenna 7.5) as phshift=0
-        phshift = 2 * np.pi * freq * (((num_antennas - 1) / 2.0 - antenna) * antenna_spacing + centre_offset) * \
-                  np.cos(np.pi / 2.0 - beamrad) / speed_of_light
+        # Middle of array is origin, boresight is in +y direction, so antenna=0 is leftmost antenna and -ve position
+        # when looking down +y axis.
+        # E.g., for 16 antennas:
+        #   antenna = 0 -> antenna_idx = -7.5,
+        #   antenna = 1 -> antenna_idx = -6.5,
+        #   ...
+        #   antenna = 15 -> antenna_idx = 7.5
+        antenna_idx = antenna - (num_antennas - 1) / 2.0
+        antenna_position = antenna_idx * antenna_spacing + centre_offset
 
-        # Bring into range (-2*pi, 2*pi)
-        phshift = np.fmod(phshift, 2 * np.pi)
+        # phshift = 0 at origin
+        phshift = -1 * k * antenna_position * np.sin(beamrad)
 
         return phshift
 
