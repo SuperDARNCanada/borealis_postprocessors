@@ -4,7 +4,7 @@ import argparse
 
 import postprocessors
 from postprocessors import ConvertFile
-from postprocessors.sandbox.hamming_beams import HammingWindowBeamforming
+from postprocessors.sandbox.hamming_corrected import HammingBeamformingCorrected
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -41,7 +41,8 @@ if __name__ == '__main__':
         # Process the file to rawacf
         if not os.path.isfile(rawacf_path):
             print(f'\t-> {rawacf_path}')
-            HammingWindowBeamforming(path, rawacf_path, input_structure, output_structure, num_processes=5)
+            processor = HammingBeamformingCorrected(path, rawacf_path, input_structure, output_structure, num_processes=5)
+            processor.process_file()
 
         # Process the file to dmap
         if args.dmap and not os.path.isfile(dmap_path):

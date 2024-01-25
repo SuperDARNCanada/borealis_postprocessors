@@ -56,6 +56,3 @@ class HammingWindowBeamforming(AntennasIQ2Rawacf):
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
         """
         super().__init__(infile, outfile, infile_structure, outfile_structure)
-
-        self.process_file(**kwargs)
-
