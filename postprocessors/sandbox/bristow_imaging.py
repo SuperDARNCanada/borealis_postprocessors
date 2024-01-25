@@ -147,6 +147,11 @@ class BristowImaging(BaseConvert):
 
         num_lags = len(record['lags'])
 
+        # Create azimuth bins for imaging
+        rx_beam_azms = np.arange(min_angle, max_angle + 1, (max_angle + 1 - min_angle) / num_bins)
+        record['beam_azms'] = rx_beam_azms
+        record['beam_nums'] = np.arange(len(rx_beam_azms), dtype=np.uint32)
+
         main_antenna_corrs_unavg = np.zeros((num_sequences, main_antenna_count*main_antenna_count, record['num_ranges'],
                                              num_lags), dtype=np.complex64)
         # intf_antenna_corrs_unavg = np.zeros((num_sequences, intf_antenna_count, record['num_ranges'], num_lags),
@@ -159,9 +164,13 @@ class BristowImaging(BaseConvert):
         # intf_antenna_corrs_unavg = BristowImaging.correlations_from_samples(antennas_data[main_antenna_count:],
         #                                                                     record)
 
-        # Create azimuth bins for imaging
-        rx_beam_azms = np.arange(min_angle, max_angle + 1, (max_angle + 1 - min_angle) / num_bins)
-        record['rx_beam_azms'] = rx_beam_azms
+        # Apply taper to the correlations
+        window = np.array([0.08081232549588463, 0.12098514265395757, 0.23455777475180511, 0.4018918165398586,
+                           0.594054435182454, 0.7778186328978896, 0.9214100134552521, 1.0,
+                           1.0, 0.9214100134552521, 0.7778186328978896, 0.594054435182454,
+                           0.4018918165398586, 0.23455777475180511, 0.12098514265395757, 0.08081232549588463])
+        square_window = np.minimum.outer(window, window).reshape((-1,))
+        main_antenna_corrs_unavg = np.einsum('sarl,a->sarl', main_antenna_corrs_unavg, square_window)
 
         # Use least squares inversion to estimate the scattering cross-section
         # [num_beams, num_ranges, num_lags]
@@ -170,33 +179,36 @@ class BristowImaging(BaseConvert):
         # intf_corrs = BristowImaging.least_squares_inversion(intf_antenna_corrs_unavg, rx_beam_azms, freq,
         #                                                     intf_antenna_spacing)
 
-        # TODO: Taper function on the correlation matrix
-
         record['main_acfs'] = main_corrs
-        # record['intf_acfs'] = intf_corrs
+        record['intf_acfs'] = np.zeros(main_corrs.shape, dtype=main_corrs.dtype)
 
         # TODO: Figure out how to do cross-correlation (antenna spacings are different)
-        # record['xcfs'] = cross_corrs.flatten()
+        record['xcfs'] = np.zeros(main_corrs.shape, dtype=main_corrs.dtype)
 
         # Set data descriptors and dimensions
-        record['correlation_descriptors'] = ['num_beams', 'num_ranges', 'num_lags']
-        record['correlation_dimensions'] = np.array([num_bins, record['num_ranges'], num_lags],
-                                                    dtype=np.uint32)
+        githash = record['borealis_git_hash'].split('-')[0].strip('v').split('.')  # v0.6.1-xxxxxx -> ['0', '6', '1']
+        if githash[0] == '0' and int(githash[1]) < 7:
+            record['correlation_descriptors'] = ['num_beams', 'num_ranges', 'num_lags']
+            record['correlation_dimensions'] = np.array([num_bins, record['num_ranges'], num_lags],
+                                                        dtype=np.uint32)
+            del record['data_descriptors']
+            del record['data_dimensions']
+        else:
+            record['data_descriptors'] = np.bytes_(['num_beams', 'num_ranges', 'num_lags'])
+            record['data_dimensions'] = np.array([num_bins, record['num_ranges'], num_lags], dtype=np.uint32)
 
         # Remove extra fields
         del record['data']
-        del record['data_descriptors']
-        del record['data_dimensions']
         del record['num_ranges']
         del record['num_samps']
         del record['pulse_phase_offset']
         del record['antenna_arrays_order']
 
         # Rename beam_azms to reflect that it is the transmitted beam azimuths
-        record['tx_beam_azms'] = tx_beam_azms
-        record['tx_beam_nums'] = record['beam_nums']
-        del record['beam_azms']
-        del record['beam_nums']
+        # record['tx_beam_azms'] = tx_beam_azms
+        # record['tx_beam_nums'] = record['beam_nums']
+        # del record['beam_azms']
+        # del record['beam_nums']
 
         # Fix representation of empty dictionary if no slice interfacing present
         slice_interfacing = record['slice_interfacing']
@@ -217,6 +229,7 @@ class BristowImaging(BaseConvert):
         :param antenna_spacing: Spacing between adjacent antennas. Meters.
         :return: The correlations for each beam, range, and lag
         """
+        dtype = xp.complex64
         # Useful quantities
         beam_rads = np.radians(beam_azms)
         num_beams = len(beam_azms)
@@ -226,55 +239,63 @@ class BristowImaging(BaseConvert):
         num_sequences, num_ant_squared, num_ranges, num_lags = correlations.shape
         num_ant = int(round(np.sqrt(num_ant_squared)))
 
-        # Get the mean correlation vector
+        correlations = xp.asarray(correlations, dtype=dtype)
+
         # [num_ranges, num_lags, num_ant*num_ant]
-        corr_mean = np.einsum('sarl->rla', correlations)
+        avg_correlations = xp.einsum('sarl->rla', correlations, dtype=dtype) / num_sequences
 
-        # Calculate the covariance matrix, E[XX^H] - E[X]E[X]^H
-        # [num_ranges, num_lags, num_ant*num_ant, num_ant*num_ant]
-        cov = (np.einsum('sarl,sbrl->rlab', correlations, correlations.conj()) -
-               np.einsum('arl,brl->rlab',
-                         np.einsum('sarl->rla', correlations),
-                         np.einsum('sbrl->rlb', correlations.conj())) / num_sequences
-               ) / num_sequences
-
-        cov_inv = np.linalg.inv(cov)
+        # # Get the mean correlation vector
+        #
+        # sum_corr = xp.einsum('sarl->rla', correlations, dtype=dtype)
+        # sum_corr_conj = xp.einsum('sbrl->rlb', correlations.conj(), dtype=dtype)
+        #
+        # # Calculate the covariance matrix, E[XX^H] - E[X]E[X]^H
+        # # [num_ranges, num_lags, num_ant*num_ant, num_ant*num_ant]
+        # cov = (xp.einsum('sarl,sbrl->rlab', correlations, correlations.conj()) -
+        #        xp.einsum('rla,rlb->rlab', sum_corr, sum_corr_conj) / num_sequences) / num_sequences
+        #
+        # cov_inv = xp.linalg.inv(cov)
 
         # Create complex exponential matrix for inversion
         # [num_ant, num_ant]
-        antenna_indices = np.arange(num_ant)
-        antenna_index_diffs = antenna_indices[:, np.newaxis] - antenna_indices[np.newaxis, :]
+        antenna_indices = np.arange(num_ant, dtype=np.int32)
+        antenna_index_diffs = np.float32(antenna_indices[:, np.newaxis] - antenna_indices[np.newaxis, :])
 
         # [num_beams]
-        phases = np.sin(beam_rads)
+        phases = np.sin(beam_rads, dtype=np.float32)
 
         # [num_ant, num_ant, num_beams]
-        exponents = np.einsum('ab,c->abc', antenna_index_diffs, phases)
-        phase_matrix = np.exp(-1j * wave_num * antenna_spacing * exponents)
+        exponents = np.einsum('ab,c->abc', antenna_index_diffs, phases, dtype=np.float32)
+        phase_matrix = np.exp(-1j * wave_num * antenna_spacing * exponents, dtype=np.complex64)
 
         # [num_ant * num_ant, num_beams]
         elongated_phase_matrix = np.reshape(phase_matrix, (num_ant_squared, num_beams))
+        elongated_phase_matrix = xp.asarray(elongated_phase_matrix, dtype=dtype)
 
-        # # TODO: Compare with scipy.linalg.pinv and scipy.linalg.lstsq
-        # # Solve the least squares problem with Moore-Penrose pseudo inverse method
-        # pseudo_inv = np.linalg.pinv(elongated_phase_matrix)
+
+        # TODO: Compare with scipy.linalg.pinv and scipy.linalg.lstsq
+        # Solve the least squares problem with Moore-Penrose pseudo inverse method
+        pseudo_inv = np.linalg.pinv(elongated_phase_matrix)
         #
-        # # pseudo_inv:             [num_beams, num_ant*num_ant]
-        # # elongated_corrs:        [num_ant*num_ant, num_ranges, num_lags]
-        # # corrs:                  [num_beams, num_ranges, num_lags]
-        # corrs = np.einsum('li,ijk->ljk', pseudo_inv, elongated_corrs)
+        # pseudo_inv:             [num_beams, num_ant*num_ant]
+        # avg_correlations:       [num_ranges, num_lags, num_ant*num_ant]
+        # corrs:                  [num_beams, num_ranges, num_lags]
+        corrs = xp.einsum('ba,rla->brl', pseudo_inv, avg_correlations)
 
         # [num_ranges, num_lags, num_beams, num_ant*num_ant]
-        bh_cov_inv = np.einsum('ca,rlab->rlcb', elongated_phase_matrix.T.conj(), cov_inv)
+        # bh_cov_inv = xp.einsum('ca,rlab->rlcb', elongated_phase_matrix.T.conj(), cov_inv, dtype=dtype)
+        #
+        # # [num_ranges, num_lags, num_beams, num_beams]
+        # first_term = xp.linalg.inv(xp.einsum('rlba,ac->rlbc', bh_cov_inv, elongated_phase_matrix))
+        #
+        # # [num_ranges, num_lags, num_beams]
+        # second_term = xp.einsum('rlba,rla->rlb', bh_cov_inv, sum_corr/num_sequences, dtype=dtype)
 
-        # [num_ranges, num_lags, num_beams, num_beams]
-        first_term = np.linalg.inv(np.einsum('rlba,ac->rlbc', bh_cov_inv, elongated_phase_matrix))
+        # # [beams, num_ranges, num_lags]
+        # corrs = xp.einsum('rlbc,rlb->crl', first_term, second_term, dtype=dtype)
 
-        # [num_ranges, num_lags, num_beams]
-        second_term = np.einsum('rlba,rla->rlb', bh_cov_inv, corr_mean)
-
-        # [beams, num_ranges, num_lags]
-        corrs = np.einsum('rlbc,rlb->crl', first_term, second_term)
+        if cupy_available:
+            corrs = xp.asnumpy(corrs)
 
         return corrs
 
@@ -379,7 +400,7 @@ class BristowImaging(BaseConvert):
 
         # Find the correlations
         for lag in range(row.shape[1]):
-            values[..., lag] = np.einsum('sijk,sijk->sijk', samples[..., row[:, lag]],
+            values[..., lag] = np.einsum('sij,sij->sij', samples[..., row[:, lag]],
                                          samples[..., column[:, lag]].conj())
 
         # Remove pulse_phase_offsets if they are present
