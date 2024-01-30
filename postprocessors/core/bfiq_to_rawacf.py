@@ -134,9 +134,9 @@ class Bfiq2Rawacf(BaseConvert):
             intf_corrs = np.einsum('ijkl->jkl', intf_corrs_unavg) / num_sequences
             cross_corrs = np.einsum('ijkl->jkl', cross_corrs_unavg) / num_sequences
 
-        main_acfs = main_corrs.flatten()
-        intf_acfs = intf_corrs.flatten()
-        xcfs = cross_corrs.flatten()
+        main_acfs = main_corrs
+        intf_acfs = intf_corrs
+        xcfs = cross_corrs
 
         return main_acfs, intf_acfs, xcfs
 

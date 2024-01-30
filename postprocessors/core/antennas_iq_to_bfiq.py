@@ -456,5 +456,7 @@ radar_dict = {
     'rkn': {'main_antenna_spacing': 15.24,
             'intf_antenna_spacing': 15.24},
     'inv': {'main_antenna_spacing': 15.24,
+            'intf_antenna_spacing': 15.24},
+    'lab': {'main_antenna_spacing': 15.24,
             'intf_antenna_spacing': 15.24}
 }
