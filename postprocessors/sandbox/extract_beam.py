@@ -68,7 +68,7 @@ class ExtractBeamsFromRawacf(BaseConvert):
         self.process_file(beams=beam_list)
 
     @staticmethod
-    def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> Union[OrderedDict, None]:
+    def process_record(record: OrderedDict, **kwargs) -> Union[OrderedDict, None]:
         """
         Takes a record from a Borealis rawacf file and extracts only specific beams.
 
@@ -76,8 +76,6 @@ class ExtractBeamsFromRawacf(BaseConvert):
         ----------
         record: OrderedDict
             hdf5 record containing rawacf data and metadata.
-        averaging_method: Union[None, str]
-            Method to use for averaging correlations across sequences. Acceptable methods are 'median' and 'mean'
         kwargs: dict
             beams: list of integers corresponding to beam numbers to extract.
 
