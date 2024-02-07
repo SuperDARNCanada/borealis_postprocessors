@@ -5,6 +5,7 @@ This file contains functions for converting antennas_iq files from widebeam expe
 to rawacf files, using a Hamming window in amplitude for beamforming to reduce receiver sidelobes.
 Receiver beam directions are adjusted to correct for azimuthal sensitivity variations.
 """
+import copy
 from collections import OrderedDict
 import numpy as np
 
@@ -129,14 +130,20 @@ class HammingBeamformingCorrected(HammingWindowBeamforming):
         record: OrderedDict
             hdf5 record, with new fields required by bfiq data format
         """
+        acf_record = copy.deepcopy(record)
         beam_nums = record['beam_nums']
         freq_khz = record['freq']
         old_beam_azms = record['beam_azms']
-        new_beam_azms = np.array([cls.xcf_directions[freq_khz][i] for i in beam_nums])
-        record['beam_azms'] = new_beam_azms
+        acf_beam_azms = np.array([cls.acf_directions[freq_khz][i] for i in beam_nums])
+        xcf_beam_azms = np.array([cls.xcf_directions[freq_khz][i] for i in beam_nums])
+        acf_record['beam_azms'] = acf_beam_azms
+        record['beam_azms'] = xcf_beam_azms
 
         # Now do the processing with the new beam directions
+        acf_record = super().process_record(acf_record)
         record = super().process_record(record)
+
+        record['main_acfs'] = acf_record['main_acfs']
 
         # The direction of sensitivity is still the same, so revert back to original beam directions.
         record['beam_azms'] = old_beam_azms
