@@ -13,23 +13,8 @@ from postprocessors.core.restructure import FILE_TYPE_MAPPING, restructure
 from postprocessors import conversion_exceptions
 
 
-def usage_msg():
-    """
-    Return the usage message for this process.
-    This is used if a -h flag or invalid arguments are provided.
-    """
-
-    usage_message = """ conversion.py [-h] infile outfile infile_type outfile_type infile_structure outfile_structure
-    
-    Pass in the filename you wish to convert, the filename you wish to save as, and the types and structures of both.
-    The script will convert the input file into an output file of type "outfile_type" and structure "outfile_structure".
-    """
-
-    return usage_message
-
-
 def conversion_parser():
-    parser = argparse.ArgumentParser(usage=usage_msg())
+    parser = argparse.ArgumentParser()
     parser.add_argument("infile",
                         help="Path to the file that you wish to convert. (e.g. 20190327.2210.38.sas.0.bfiq.hdf5.site)")
     parser.add_argument("outfile",

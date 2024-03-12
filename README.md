@@ -20,18 +20,18 @@ this method is as follows:
 ```python3
 import postprocessors as pp
 
+# define infile, outfile, infile_type, outfile_type, infile_structure, and outfile_structure here
 pp.ConvertFile(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure)
 ```
 
 ### Defining your own processing method
-Following the template of any of the core processing chains (antennas_iq to bfiq, bfiq to rawacf, antennas_iq to rawacf),
+Following the template of the core processing chains (antennas_iq to bfiq, bfiq to rawacf, antennas_iq to rawacf),
 it is fairly straightforward to define your own class for processing files. It is recommended you make this class
 within the `/postprocessors/sandbox/` directory. Your class must have a few key components, following the template 
 below:
 
 ```python3
 from collections import OrderedDict
-from typing import Union
 from postprocessors import BaseConvert
 
 
@@ -42,7 +42,7 @@ class CustomProcessing(BaseConvert):
     # You can add class variables here, that will be accessible within process_record().
 
     def __init__(self, infile: str, outfile: str, infile_type: str, outfile_type: str, infile_structure: str, 
-                 outfile_structure: str, **kwargs):
+                 outfile_structure: str):
         """
         Feel free to add more parameters to this, or hard-code in the file types and structures if you don't need 
         them to be variable.
@@ -67,10 +67,6 @@ class CustomProcessing(BaseConvert):
         # to process_record() within process_file()
         super().__init__(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure)
 
-        # You can pass extras parameters needed for process_record() as kwargs
-
-        self.process_file(**kwargs)
-
     @classmethod
     def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         """
@@ -93,6 +89,20 @@ class CustomProcessing(BaseConvert):
         # do your processing here
         return record
 ```
+
+To process a file with your CustomProcessing class, you can do the following within a python script:
+
+```python3
+from postprocessors.sandbox.custom_processing import CustomProcessing
+
+# define infile, outfile, infile_type, outfile_type, infile_structure, and outfile_structure here
+processor = CustomProcessing(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure)
+processor.process_file()
+```
+
+If you would like to use multiprocessing to speed up the job, you can pass e.g. `num_processes=5` to spread the job
+over 5 cores of your machine. If you are doing so, be sure that the main python script runs in a `if __name__ == '__main__':` block
+so the multiprocessing works as expected.
 
 ## Package Structure
 

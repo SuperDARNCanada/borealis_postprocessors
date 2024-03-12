@@ -174,6 +174,14 @@ class BaseConvert(object):
         3. Restructure to final format
         4. Remove all intermediate files created along the way
 
+        Parameters
+        ----------
+        **kwargs: dict
+            Supported kwargs include:
+                force: bool, if True will overwrite an existing output file
+                avg_num: int, how many records are grouped together for a single process_record() call
+                num_processes: int, how many CPU cores to distribute the job across
+            Other kwargs may be supported by child classes and will be passed through to the process_record() function.
         """
 
         if os.path.isfile(self.outfile) and not kwargs.get('force', False):
@@ -229,18 +237,34 @@ class BaseConvert(object):
                                        records_per_process=records_per_process,
                                        processing_fn=self.process_record, **kwargs)
 
-            with get_context("spawn").Pool(kwargs.get('num_processes', 5)) as p:
-                with h5py.File(processed_file, 'a') as outfile:
-                    for completed_record, i in p.imap(function_to_call, indices):
+            # Do the processing on each record
+            with h5py.File(processed_file, 'a') as outfile:
+                def append_to_file(rec):
+                    """Convenience function to append to file"""
+                    if rec is not None:
+                        rs.write_records(outfile, {all_records[i]: rec})
+
+                def progress_bar(done_so_far, total):
+                    """Convenience function to print a progress bar"""
+                    completion_percentage = done_so_far / total
+                    bar_width = 60  # arbitrary width
+                    filled = int(bar_width * completion_percentage)
+                    unfilled = bar_width - filled
+                    print(f'\r[{"=" * filled}{" " * unfilled}] {completion_percentage * 100:.2f}%', flush=True, end='')
+
+                if 'num_processes' in kwargs:   # Use multiprocessing if specified
+                    with get_context("spawn").Pool(kwargs.get('num_processes', 1)) as p:
+                        for completed_record, i in p.imap(function_to_call, indices):
+                            append_to_file(completed_record)
+                            num_completed += 1
+                            progress_bar(num_completed, num_to_process)
+                else:   # Default single-worker
+                    for idx in indices:
+                        completed_record, i = function_to_call(idx)
+                        append_to_file(completed_record)
                         num_completed += 1
-                        if completed_record is not None:
-                            rs.write_records(outfile, {all_records[i]: completed_record})
-                        completion_percentage = num_completed / num_to_process
-                        bar_width = 60  # arbitrary width
-                        filled = int(bar_width * completion_percentage)
-                        unfilled = bar_width - filled
-                        print(f'\r[{"="*filled}{" "*unfilled}] {completion_percentage*100:.2f}%', flush=True, end='')
-                print()     # Keep the progress bar on its own line
+                        progress_bar(num_completed, num_to_process)
+                print('\r', flush=True, end='')     # Remove the progress bar
 
             # Restructure to final structure format, if necessary
             if self.outfile_structure != 'site':
