@@ -4,12 +4,16 @@
 This file contains functions for imaging antennas_iq files to rawacf files,
 using the Spherical Wave Harmonic Transform (Carozzi, 2015) to solve the imaging inverse problem.
 """
-import copy
 import os
 from collections import OrderedDict
 import numpy as np
 import h5py
 import healpy as hp
+
+try:
+    import cupy as xp
+except ImportError:
+    import numpy as xp
 
 from postprocessors import AntennasIQ2Rawacf, AntennasIQ2Bfiq
 
@@ -58,11 +62,11 @@ class SWHTImaging(AntennasIQ2Rawacf):
             theta, phi = hp.pix2ang(nside=nside, ipix=np.arange(npix // 2))     # in radians
             fov = np.stack([phi, theta], axis=1)
             baselines = np.array(sorted(self.unique_baselines.keys()), dtype=np.float32) * self.freq_hz / 299792458
-            generate_coeffs(coeffs_file, self.freq_hz, fov, lmax, baselines=baselines)
+            self.generate_coeffs(coeffs_file, self.freq_hz, fov, lmax, baselines=baselines)
 
         f = h5py.File(coeffs_file, 'r')
         coeffs_group = f['coeffs']
-        coeffs = coeffs_group['85'][()]
+        self.coeffs = coeffs_group['85'][()]
         f.close()
 
     @staticmethod
@@ -107,7 +111,6 @@ class SWHTImaging(AntennasIQ2Rawacf):
                         unique_baselines[(coords[0], coords[1], coords[2])] = [(i, j)]
             # Result is a dictionary where keys are unique baselines, and values are lists of indices that are redundant
 
-            # Convert from distance to phase difference
             freq = record.attrs['freq'] * 1000  # freq is stored in kHz
 
             return freq, unique_baselines
@@ -215,152 +218,158 @@ class SWHTImaging(AntennasIQ2Rawacf):
         # [num_unique_baselines, num_lags, num_ranges]
         avg_visibilities = np.median(unique_visibilities, axis=1)
 
-        # Calculate SNR from zero lag, zero baseline power
-        # [num_ranges]
-        snr = 10 * np.log10(np.abs(avg_visibilities[0, 0, :]) / np.median(noise))
+        # # Calculate SNR from zero lag, zero baseline power
+        # # [num_ranges]
+        # snr = 10 * np.log10(np.abs(avg_visibilities[0, 0, :]) / np.median(noise))
 
         # Next, calculate the brightness estimate using the visibilities and the coeffs matrix
-        brightness = np.einsum('rbv,vlr->rlb', coeffs, avg_visibilities)
-
-        record['data'] = brightness
+        # self.coeffs: [num_degrees, num_pixels, num_unique_baselines]
+        # avg_visibilities: [num_unique_baselines, num_lags, num_ranges]
+        brightness = np.einsum('pb,blr->rlp', self.coeffs, avg_visibilities)
+        # suppressed_brightness = np.prod(brightness, axis=0)     # Multiply the brightness at each degree
+        record['brightness'] = brightness
+        # record['suppressed_brightness'] = suppressed_brightness
         record['raw_visibilities'] = visibilities
         record['noise'] = noise
-        record['directions'] = fov
+        record['directions'] = self.fov
         record['data_dimensions'] = np.array(brightness.shape, dtype=np.int32)
         record['data_descriptors'] = np.bytes_(['num_ranges', 'num_lags', 'num_points'])
 
         return record
 
+    @staticmethod
+    def uvw_to_rtp(u, v, w):
+        xy = u*u + v*v
+        r = np.sqrt(xy + w*w)
+        theta = np.arccos(w / r)
+        phi = np.arctan2(v, u)
 
-def uvw_to_rtp(u, v, w):
-    xy = u*u + v*v
-    r = np.sqrt(xy + w*w)
-    theta = np.arccos(w / r)
-    phi = np.arctan2(v, u)
+        theta[np.isnan(theta)] = 0.0
+        phi[np.isnan(theta)] = 0.0
 
-    return r, theta, phi
+        return r, theta, phi
 
+    @staticmethod
+    def coords_to_baselines(x, y, z, wavelength):
+        coords = np.stack([x, y, z], axis=1)
+        diffs = (coords[np.newaxis, ...] - coords[:, np.newaxis, :]) / wavelength
+        idx = np.triu_indices(diffs.shape[0], 1)
 
-def coords_to_baselines(x, y, z, wavelength):
-    coords = np.stack([x, y, z], axis=1)
-    diffs = (coords[np.newaxis, ...] - coords[:, np.newaxis, :]) / wavelength
-    idx = np.triu_indices(diffs.shape[0], 1)
+        return diffs[idx][0], diffs[idx][1], diffs[idx][2]
 
-    return diffs[idx][0], diffs[idx][1], diffs[idx][2]
+    @staticmethod
+    def generate_coeffs(filename, freq_hz, fov, lmax=85, **kwargs):
+        """
+        Generates coefficient matrix for fast SWHT and stores in filename.
 
+        Parameters
+        ----------
+        filename: str
+            Path to file for storing coefficient matrices
+        freq_hz: float
+            Rx frequency in Hz
+        fov: np.ndarray
+            Array of [num_points, 2] defining the field of view, where the last dimension is azimuth, colatitude coordinates
+        lmax: int
+            Maximum spherical harmonic degree to calculate
+        **kwargs: dict
+            ant_coords: np.ndarray
+                Array of antenna coordinates, as 2D array of [num_antennas, 3] where last dimension is x, y, z coordinates
+            baselines: np.ndarray
+                Array of visibility baselines, as 2D array of [num_baselines, 3] where last dimension is u, v, w coordinates
+        """
+        wavelength = 299792458 / freq_hz
+        ko = 2 * np.pi / wavelength
 
-def generate_coeffs(filename, freq_hz, fov, lmax=85, **kwargs):
-    """
-    Generates coefficient matrix for fast SWHT and stores in filename.
+        if 'ant_coords' not in kwargs and 'baselines' not in kwargs:
+            raise RuntimeError("Must specify one of `ant_coords` or `baselines`")
+        elif 'ant_coords' in kwargs and 'baselines' in kwargs:
+            raise RuntimeError("Must specify only one of `ant_coords` or `baselines`")
+        elif 'ant_coords' in kwargs:
+            ant_coords = kwargs.get('ant_coords')
+            u, v, w = SWHTImaging.coords_to_baselines(ant_coords[0, :],
+                                                      ant_coords[1, :],
+                                                      ant_coords[2, :],
+                                                      wavelength)
+        else:
+            baselines = kwargs.get('baselines')
+            u, v, w = baselines[:, 0], baselines[:, 1], baselines[:, 2]
 
-    Parameters
-    ----------
-    filename: str
-        Path to file for storing coefficient matrices
-    freq_hz: float
-        Rx frequency in Hz
-    fov: np.ndarray
-        Array of [num_points, 2] defining the field of view, where the last dimension is azimuth, colatitude coordinates
-    lmax: int
-        Maximum spherical harmonic degree to calculate
-    **kwargs: dict
-        ant_coords: np.ndarray
-            Array of antenna coordinates, as 2D array of [num_antennas, 3] where last dimension is x, y, z coordinates
+        r, t, p = SWHTImaging.uvw_to_rtp(u, v, w)
+        r *= wavelength  # Since r, t, p was converted from u, v, w, we need the *wavelength back to match SWHT algorithm
+        SWHTImaging.create_coeffs(filename, fov, lmax, wavelength, np.array([u, v, w]))
+        SWHTImaging.calculate_coeffs(filename, fov, ko, r, t, p, lmax)
+
+    @staticmethod
+    def create_coeffs(filename, fov, lmax, wavelength, baselines):
+        """
+        Creates a new HDF5 file for storing coefficient matrices.
+
+        Parameters
+        ----------
+        filename: str
+            Path to file
         baselines: np.ndarray
             Array of visibility baselines, as 2D array of [num_baselines, 3] where last dimension is u, v, w coordinates
-    """
-    wavelength = 299792458 / freq_hz
-    ko = 2 * np.pi / wavelength
+        fov: np.ndarray
+            Array of [num_points, 2] defining the field of view, where the last dimension is azimuth, colatitude coordinates
+        lmax: int
+            Maximum spherical harmonic degree to calculate
+        wavelength: float
+            Radio wavelength in meters.
+        """
+        f = h5py.File(filename, 'w')
+        f.create_dataset('fov', data=fov)
+        f.create_dataset('lmax', data=lmax)
+        f.create_dataset('wavelength', data=wavelength)
+        f.create_dataset('baselines', data=baselines)
+        f.close()
 
-    if 'ant_coords' not in kwargs and 'baselines' not in kwargs:
-        raise RuntimeError("Must specify one of `ant_coords` or `baselines`")
-    elif 'ant_coords' in kwargs and 'baselines' in kwargs:
-        raise RuntimeError("Must specify only one of `ant_coords` or `baselines`")
-    elif 'ant_coords' in kwargs:
-        ant_coords = kwargs.get('ant_coords')
-        u, v, w = coords_to_baselines(ant_coords[0, :],
-                                      ant_coords[1, :],
-                                      ant_coords[2, :],
-                                      wavelength)
-    else:
-        baselines = kwargs.get('baselines')
-        u, v, w = baselines[:, 0], baselines[:, 1], baselines[:, 2]
+    @staticmethod
+    def calculate_coeffs(filename, fov, ko, r, theta, phi, lmax):
+        """
+        Calculates coefficient matrices for SWHT.
 
-    r, t, p = uvw_to_rtp(u, v, w)
-    r *= wavelength  # Since r, t, p was converted from u, v, w, we need the *wavelength back to match SWHT algorithm
-    create_coeffs(filename, fov, lmax, wavelength, np.array([u, v, w]))
-    calculate_coeffs(filename, fov, ko, r, t, p, lmax)
+        Parameters
+        ----------
+        filename: str
+            Path to file that coefficients are saved in.
+        fov: np.ndarray
+            Array of [num_points, 2] defining the field of view, where the last dimension is azimuth, colatitude coordinates
+        ko: float
+            Wavenumber (2 * pi / wavelength) of radio wave
+        r: np.ndarray
+            Radial component of baselines, in meters
+        theta: np.ndarray
+            Colatitude component of baselines, in radians
+        phi: np.ndarray
+            Azimuthal component of baselines, in radians
+        lmax: int
+            Maximum spherical harmonic degree to calculate. Max 85
 
+        Returns
+        -------
 
-def create_coeffs(filename, fov, lmax, wavelength, baselines):
-    """
-    Creates a new HDF5 file for storing coefficient matrices.
+        """
+        from scipy.special import sph_harm, spherical_jn
+        coeffs = np.zeros((fov.shape[0], len(r)), dtype=np.complex128)
 
-    Parameters
-    ----------
-    filename: str
-        Path to file
-    baselines: np.ndarray
-        Array of visibility baselines, as 2D array of [num_baselines, 3] where last dimension is u, v, w coordinates
-    fov: np.ndarray
-        Array of [num_points, 2] defining the field of view, where the last dimension is azimuth, colatitude coordinates
-    lmax: int
-        Maximum spherical harmonic degree to calculate
-    wavelength: float
-        Radio wavelength in meters.
-    """
-    f = h5py.File(filename, 'w')
-    f.create_dataset('fov', data=fov)
-    f.create_dataset('lmax', data=lmax)
-    f.create_dataset('wavelength', data=wavelength)
-    f.create_dataset('baselines', data=baselines)
-    f.close()
+        if lmax > 85:
+            raise RuntimeError("Harmonic degree too large, solution would be numerically unstable")
+        for l in range(lmax + 1):
+            constant = ko * ko / (2 * np.pi * np.pi * ((-1j) ** (l % 4)))
+            for m in range(-l, l + 1):
+                # constant * Y_{l,m}(fov) * j_l(ko*r) * Y^*_{l,m}(theta, phi)
+                coeffs += constant * \
+                          np.repeat(sph_harm(m, l, fov[:, 1], fov[:, 0])[:, np.newaxis], len(r), axis=1) * \
+                          np.repeat(spherical_jn(l, ko * r) *
+                                    np.conjugate(sph_harm(m, l, phi, theta))[np.newaxis, :],
+                                    fov.shape[0], axis=0)
+            if l in range(5, 86, 10):
+                SWHTImaging.append_coeffs(filename, l, coeffs)
 
-
-def calculate_coeffs(filename, fov, ko, r, theta, phi, lmax):
-    """
-    Calculates coefficient matrices for SWHT.
-
-    Parameters
-    ----------
-    filename: str
-        Path to file that coefficients are saved in.
-    fov: np.ndarray
-        Array of [num_points, 2] defining the field of view, where the last dimension is azimuth, colatitude coordinates
-    ko: float
-        Wavenumber (2 * pi / wavelength) of radio wave
-    r: np.ndarray
-        Radial component of baselines, in meters
-    theta: np.ndarray
-        Colatitude component of baselines, in radians
-    phi: np.ndarray
-        Azimuthal component of baselines, in radians
-    lmax: int
-        Maximum spherical harmonic degree to calculate. Max 85
-
-    Returns
-    -------
-
-    """
-    from scipy.special import sph_harm, spherical_jn
-    coeffs = np.zeros((fov.shape[0], len(r)), dtype=np.complex128)
-
-    if lmax > 85:
-        raise RuntimeError("Harmonic degree too large, solution would be numerically unstable")
-    for l in range(lmax + 1):
-        constant = ko * ko / (2 * np.pi * np.pi * ((-1j) ** (l % 4)))
-        for m in range(-l, l + 1):
-            # constant * Y_{l,m}(fov) * j_l(ko*r) * Y^*_{l,m}(theta, phi)
-            coeffs += constant * \
-                      np.repeat(sph_harm(m, l, fov[1], fov[0])[:, np.newaxis], len(r), axis=1) * \
-                      np.repeat(spherical_jn(l, ko * r) *
-                                np.conjugate(sph_harm(m, l, phi, theta))[np.newaxis, :],
-                                fov.shape[0], axis=0)
-        if l in range(5, 86, 10):
-            append_coeffs(filename, l, coeffs)
-
-
-def append_coeffs(filename, degree, coeffs):
-    f = h5py.File(filename, 'a')
-    f.create_dataset(f'coeffs/{degree:02d}', data=coeffs)
-    f.close()
+    @staticmethod
+    def append_coeffs(filename, degree, coeffs):
+        f = h5py.File(filename, 'a')
+        f.create_dataset(f'coeffs/{degree:02d}', data=coeffs)
+        f.close()
