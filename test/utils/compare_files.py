@@ -45,6 +45,9 @@ def compare_files(file1, file2):
             else:
                 # Compare floating-point values differently
                 if 'float' in str(entry1.dtype) or 'complex' in str(entry1.dtype):
+                    if entry1.shape != entry2.shape:
+                        entry1 = entry1[()].reshape(entry2.shape)
+
                     if not np.allclose(entry1, entry2, equal_nan=True):
                         compare_string += prefix + f"/{key}:\n" \
                                                    f"\t{entry1}\n" \
