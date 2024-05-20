@@ -54,7 +54,7 @@ class FreqAnalysis(BaseConvert):
     def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         data = record["data"]
 
-        fs = record["rx_sample_rate"]
+        fs = 5e6 / 15  # Hz
 
         pulses = record["pulses"]
         tau = round(record["tau_spacing"] * 1e-6 * fs)  # puts into units of samples
@@ -73,14 +73,14 @@ class FreqAnalysis(BaseConvert):
         data[..., mask] = 0.0 + 0.0j
         masked_fft = np.sum(np.abs(fft.fftshift(fft.fft(data), axes=-1)), axis=0)
 
-        freqs = fft.fftfreq(data.shape[-1], d=1/fs)
+        freqs = fft.fftshift(fft.fftfreq(data.shape[-1], d=1/fs))
         df = freqs[1] - freqs[0]
         output_freq_resolution = 1000   # Hz
         sample_resolution = int(round(output_freq_resolution / df))
 
-        kernel = np.ones(sample_resolution) / sample_resolution
-        reduced_fft = np.array([np.convolve(masked_fft[i], kernel, mode='same')
-                                for i in masked_fft.shape[0]])[::sample_resolution]
+        kernel = np.ones((sample_resolution,)) / sample_resolution
+        reduced_fft = np.array([np.convolve(masked_fft[i, :], kernel, mode='same')
+                                for i in range(masked_fft.shape[0])])[..., ::sample_resolution]
         record["data"] = reduced_fft
         record["freqs"] = freqs[::sample_resolution] - df/2
 
