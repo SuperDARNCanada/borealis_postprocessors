@@ -1,18 +1,17 @@
 # Copyright 2021 SuperDARN Canada, University of Saskatchewan
 # Author: Remington Rohel
 """
-This file contains functions for converting antennas_iq files
-to rawacf files.
+This file contains functions for adding a lag table and processing bfiq data into rawacf data.
 """
 from collections import OrderedDict
 from typing import Union
 
-from data_processing.convert_base import BaseConvert
-from data_processing.antennas_iq_to_bfiq import ProcessAntennasIQ2Bfiq
-from data_processing.bfiq_to_rawacf import ProcessBfiq2Rawacf
+import numpy as np
+
+from postprocessors import BaseConvert, Bfiq2Rawacf
 
 
-class ProcessAntennasIQ2Rawacf(BaseConvert):
+class ProcessIMPT(BaseConvert):
     """
     Class for conversion of Borealis antennas_iq files into rawacf files. This class inherits from
     BaseConvert, which handles all functionality generic to postprocessing borealis files.
@@ -21,7 +20,6 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
     --------
     ConvertFile
     BaseConvert
-    ProcessAntennasIQ2Bfiq
     ProcessBfiq2Rawacf
 
     Attributes
@@ -56,7 +54,7 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
         averaging_method: str
             Method for averaging correlations across sequences. Either 'median' or 'mean'.
         """
-        super().__init__(infile, outfile, 'antennas_iq', 'rawacf', infile_structure, outfile_structure)
+        super().__init__(infile, outfile, 'bfiq', 'rawacf', infile_structure, outfile_structure)
         self.averaging_method = averaging_method
 
         self.process_file()
@@ -64,7 +62,7 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
     @staticmethod
     def process_record(record: OrderedDict, averaging_method: Union[None, str], **kwargs) -> OrderedDict:
         """
-        Takes a record from an antennas_iq file process into a rawacf record.
+        Takes a record from an ImptTest bfiq file process into a rawacf record.
 
         Parameters
         ----------
@@ -78,7 +76,31 @@ class ProcessAntennasIQ2Rawacf(BaseConvert):
         record: OrderedDict
             hdf5 record, with new fields required by rawacf data format
         """
-        record = ProcessAntennasIQ2Bfiq.process_record(record, averaging_method)
-        record = ProcessBfiq2Rawacf.process_record(record, averaging_method)
+        STD_8P_LAG_TABLE = [[0, 0],
+                            [42, 43],
+                            [22, 24],
+                            [24, 27],
+                            [27, 31],
+                            [22, 27],
+                            [24, 31],
+                            [14, 22],
+                            [22, 31],
+                            [14, 24],
+                            [31, 42],
+                            [31, 43],
+                            [14, 27],
+                            [0, 14],
+                            [27, 42],
+                            [27, 43],
+                            [14, 31],
+                            [24, 42],
+                            [24, 43],
+                            [22, 42],
+                            [22, 43],
+                            [0, 22],
+                            [0, 24],
+                            [43, 43]]
+        record['lags'] = np.array(STD_8P_LAG_TABLE, dtype=np.uint32)
+        record = Bfiq2Rawacf.process_record(record, averaging_method)
 
         return record
