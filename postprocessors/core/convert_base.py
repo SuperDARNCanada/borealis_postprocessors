@@ -27,7 +27,8 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, processing_fn, **kwargs):
+def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, processing_fn,
+                       file_type: str, **kwargs):
     """
     Helper function for processing a single record. It is defined here to facilitate multiprocessing.
 
@@ -43,6 +44,8 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         Number of records to process per call to this function.
     processing_fn: callable
         Function to call to process a record.
+    file_type: str
+        File type that is being processed. One of 'antennas_iq', 'bfiq', or 'rawacf'.
     kwargs: dict
         Key-word arguments to pass to processing_fn
 
@@ -51,13 +54,13 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
     formatted_record, idx: properly-formatted processed record and the index which was processed.
     """
     with h5py.File(filename, 'r') as hdf5_file:
-        record_dict = rs.read_group(hdf5_file[record_keys[idx]])
+        record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
         record_list = []  # List of all 'extra' records to process
 
         # If processing multiple records at a time, get all the records ready
         if records_per_process > 1:
             for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
-                record_list.append(rs.read_group(hdf5_file[record_keys[num]]))
+                record_list.append(rs.read_group(hdf5_file[record_keys[num]], file_type))
 
     processed_record = processing_fn(record_dict, extra_records=record_list, **kwargs)
 
@@ -235,7 +238,8 @@ class BaseConvert(object):
             function_to_call = partial(processing_machine,
                                        filename=file_to_process, record_keys=all_records,
                                        records_per_process=records_per_process,
-                                       processing_fn=self.process_record, **kwargs)
+                                       processing_fn=self.process_record, file_type=self.infile_type,
+                                       **kwargs)
 
             # Do the processing on each record
             with h5py.File(processed_file, 'a') as outfile:

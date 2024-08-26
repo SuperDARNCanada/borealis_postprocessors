@@ -9,7 +9,7 @@ import numpy as np
 import h5py
 
 
-def read_group(group: h5py.Group):
+def read_group(group: h5py.Group, file_type: str):
     """
     Reads a group from an HDF5 file into a dictionary.
 
@@ -17,6 +17,8 @@ def read_group(group: h5py.Group):
     ----------
     group: h5py.Group
         Opened h5py group
+    file_type: str
+        Type of data file. One of 'antennas_iq', 'bfiq', or 'rawacf'
 
     Returns
     -------
@@ -29,9 +31,9 @@ def read_group(group: h5py.Group):
     datasets = list(group.keys())
     for dset_name in datasets:
         dset = group[dset_name]
-        if 'strtype' in dset.attrs:  # string type, requires some handling
-            itemsize = dset.attrs['itemsize']
-            data = dset[:].view(dtype=(np.unicode_, itemsize))
+        if 'strtype' in dset.attrs.keys() or dset_name in STRING_DATASET_SIZES[file_type].keys():  # string type, requires some handling
+            itemsize = dset.attrs.get('itemsize', STRING_DATASET_SIZES[file_type][dset_name])
+            data = dset[:].view(dtype=(np.str_, itemsize))
         else:
             data = dset[:]  # non-string, can simply load
         group_dict[dset_name] = data
@@ -144,4 +146,16 @@ FILE_STRUCTURE_MAPPING = {
     'antennas_iq': ['site', 'array'],
     'bfiq': ['site', 'array', 'iqdat'],
     'rawacf': ['site', 'array', 'dmap']
+}
+
+# Maps the string-type dataset fields of a record to their corresponding numpy-array itemsizes, for correct parsing
+# of these fields. This dictionary contains the fallback values if the dataset itself doesn't contain the metadata
+# that is expected for these fields.
+STRING_DATASET_SIZES = {
+    'antennas_iq': {'antenna_arrays_order': 10,
+                    'data_descriptors': 13},
+    'bfiq': {'antenna_arrays_order': 4,
+             'data_descriptors': 18},
+    'rawacf': {'correlation_descriptors': 10,
+               'data_descriptors': 10}
 }

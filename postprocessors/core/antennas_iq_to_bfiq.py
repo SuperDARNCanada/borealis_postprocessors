@@ -299,7 +299,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         first_range: float
             Distance to first range in km
         """
-        # TODO: Get this from somewhere, probably linked to the enperiment ran. Might need to look up
+        # TODO: Get this from somewhere, probably linked to the experiment ran. Might need to look up
         #   based on githash
         first_range = 180.0  # scf.FIRST_RANGE
 
@@ -389,7 +389,8 @@ class AntennasIQ2Bfiq(BaseConvert):
         """
         # Infer the number of ranges from the record metadata
         first_range_offset = cls.calculate_first_range_rtt(record) * 1e-6 * record['rx_sample_rate']
-        num_ranges = record['num_samps'] - np.int32(first_range_offset) - record['blanked_samples'][-1]
+        tau_in_samples = int(round(record['tau_spacing'] * 1e-6 * record['rx_sample_rate']))
+        num_ranges = record['num_samps'] - np.int32(first_range_offset) - (record['pulses'][-1] * tau_in_samples)
 
         # 3 extra samples taken for each record (not sure why)
         num_ranges = num_ranges - 3
@@ -458,5 +459,7 @@ radar_dict = {
     'inv': {'main_antenna_spacing': 15.24,
             'intf_antenna_spacing': 15.24},
     'lab': {'main_antenna_spacing': 15.24,
-            'intf_antenna_spacing': 15.24}
+            'intf_antenna_spacing': 15.24},
+    'wal': {'main_antenna_spacing': 12.8016,
+            'intf_antenna_spacing': 12.8016}
 }
