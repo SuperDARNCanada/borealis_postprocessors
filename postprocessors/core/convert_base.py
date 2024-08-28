@@ -256,6 +256,7 @@ class BaseConvert(object):
                     unfilled = bar_width - filled
                     print(f'\r[{"=" * filled}{" " * unfilled}] {completion_percentage * 100:.2f}%', flush=True, end='')
 
+                print()
                 if 'num_processes' in kwargs:   # Use multiprocessing if specified
                     with get_context("spawn").Pool(kwargs.get('num_processes', 1)) as p:
                         for completed_record, i in p.imap(function_to_call, indices):

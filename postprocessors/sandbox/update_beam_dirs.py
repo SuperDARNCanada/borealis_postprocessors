@@ -59,26 +59,20 @@ class UpdateBeamDirs(AntennasIQ2Rawacf):
         old_azms = record["beam_azms"]
         if isinstance(old_azms, list):
             new_azms = [
-                np.round(
-                    np.rad2deg(
-                        np.arcsin(
-                            cls.old_spacing
-                            * np.sin(np.deg2rad(theta))
-                            / cls.new_spacing
-                        )
-                    ),
-                    decimals=2,
+                np.rad2deg(
+                    np.arcsin(
+                        cls.old_spacing
+                        * np.sin(np.deg2rad(theta))
+                        / cls.new_spacing
+                    )
                 )
                 for theta in old_azms
             ]
         else:
-            new_azms = np.round(
-                np.rad2deg(
-                    np.arcsin(
-                        cls.old_spacing * np.sin(np.deg2rad(old_azms)) / cls.new_spacing
-                    )
-                ),
-                decimals=2,
+            new_azms = np.rad2deg(
+                np.arcsin(
+                    cls.old_spacing * np.sin(np.deg2rad(old_azms)) / cls.new_spacing
+                )
             )
 
         record["beam_azms"] = new_azms

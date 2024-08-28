@@ -40,7 +40,7 @@ def compare_files(file1, file2):
                 compare_string += prefix + f'Mismatched types for key {key}'
             # If they are dictionaries, recurse
             elif type(entry1) == h5py.Group:
-                compare_dictionaries(entry1, entry2, prefix + '\t')
+                compare_string += compare_dictionaries(entry1, entry2, prefix + '\t')
             # Otherwise, they must be lists or values, and so can be compared directly
             else:
                 # Compare floating-point values differently
@@ -61,3 +61,14 @@ def compare_files(file1, file2):
 
     print(f"Comparing {file1} with {file2}:")
     print(compare_dictionaries(group1, group2, ""))
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('file1')
+    parser.add_argument('file2')
+    args = parser.parse_args()
+
+    compare_files(args.file1, args.file2)
+
