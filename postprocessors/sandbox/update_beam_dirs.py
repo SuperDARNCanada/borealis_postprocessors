@@ -29,13 +29,14 @@ class UpdateBeamDirs(AntennasIQ2Rawacf):
     old_spacing = radar_dict["sas"]["main_antenna_spacing"]
     new_spacing = radar_dict["wal"]["main_antenna_spacing"]
 
+    new_beam_azms = (np.arange(16) - 7.5) * 3.91  # degrees
+
     def __init__(
         self,
         infile: str,
         outfile: str,
         infile_structure: str,
         outfile_structure: str,
-        **kwargs,
     ):
         """
         Initialize the attributes of the class.
@@ -56,26 +57,7 @@ class UpdateBeamDirs(AntennasIQ2Rawacf):
     def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         """Update the beam_azms field, then process normally"""
 
-        old_azms = record["beam_azms"]
-        if isinstance(old_azms, list):
-            new_azms = [
-                np.rad2deg(
-                    np.arcsin(
-                        cls.old_spacing
-                        * np.sin(np.deg2rad(theta))
-                        / cls.new_spacing
-                    )
-                )
-                for theta in old_azms
-            ]
-        else:
-            new_azms = np.rad2deg(
-                np.arcsin(
-                    cls.old_spacing * np.sin(np.deg2rad(old_azms)) / cls.new_spacing
-                )
-            )
-
-        record["beam_azms"] = new_azms
+        record["beam_azms"] = cls.new_beam_azms[record["beam_nums"]].tolist()
         record = super().process_record(record, **kwargs)
 
         return record
