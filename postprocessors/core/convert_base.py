@@ -279,6 +279,7 @@ class BaseConvert(object):
                                         f' generated files.')
             postprocessing_logger.error(e)
             postprocessing_logger.error(traceback.print_exc())
+            raise e
         finally:
             self._remove_temp_files()
 

@@ -4,7 +4,7 @@ import argparse
 
 import postprocessors
 from postprocessors import ConvertFile
-from postprocessors.sandbox.hamming_corrected import HammingBeamformingCorrected
+from postprocessors.sandbox.chebyshev_30db import Chebyshev30dB
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -20,7 +20,7 @@ if __name__ == '__main__':
 
     output_structure = 'site'
 
-    for path in glob.glob(f'{in_directory}/{pattern}'):
+    for path in glob.glob(f'{in_directory}/**/{pattern}'):
         if "antennas_iq" not in path:
             continue
         if not os.path.isfile(path):
@@ -41,8 +41,8 @@ if __name__ == '__main__':
         # Process the file to rawacf
         if not os.path.isfile(rawacf_path):
             print(f'\t-> {rawacf_path}')
-            processor = HammingBeamformingCorrected(path, rawacf_path, input_structure, output_structure, num_processes=5)
-            processor.process_file()
+            processor = Chebyshev30dB(path, rawacf_path, input_structure, output_structure)
+            processor.process_file(num_processes=10)
 
         # Process the file to dmap
         if args.dmap and not os.path.isfile(dmap_path):

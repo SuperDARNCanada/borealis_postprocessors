@@ -32,8 +32,7 @@ def read_group(group: h5py.Group, file_type: str):
     for dset_name in datasets:
         dset = group[dset_name]
         if 'strtype' in dset.attrs.keys() or dset_name in STRING_DATASET_SIZES[file_type].keys():  # string type, requires some handling
-            itemsize = dset.attrs.get('itemsize', STRING_DATASET_SIZES[file_type][dset_name])
-            data = dset[:].view(dtype=(np.str_, itemsize))
+            data = np.array([x.decode('utf-8') for x in dset[:]])
         else:
             data = dset[:]  # non-string, can simply load
         group_dict[dset_name] = data
