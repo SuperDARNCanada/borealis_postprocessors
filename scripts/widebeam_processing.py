@@ -5,6 +5,8 @@ import argparse
 import postprocessors
 from postprocessors import ConvertFile
 from postprocessors.sandbox.chebyshev_30db import Chebyshev30dB
+from postprocessors.sandbox.hamming_corrected import HammingBeamformingCorrected
+from postprocessors.sandbox.hamming_beams import HammingWindowBeamforming
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -42,7 +44,7 @@ if __name__ == '__main__':
         if not os.path.isfile(rawacf_path):
             print(f'\t-> {rawacf_path}')
             processor = Chebyshev30dB(path, rawacf_path, input_structure, output_structure)
-            processor.process_file(num_processes=10)
+            processor.process_file(num_processes=10, keep_intermediate_files=False)
 
         # Process the file to dmap
         if args.dmap and not os.path.isfile(dmap_path):

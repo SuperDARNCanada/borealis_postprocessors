@@ -184,6 +184,7 @@ class BaseConvert(object):
                 force: bool, if True will overwrite an existing output file
                 avg_num: int, how many records are grouped together for a single process_record() call
                 num_processes: int, how many CPU cores to distribute the job across
+                keep_intermediate_files: bool, if True all intermediate files are not discarded
             Other kwargs may be supported by child classes and will be passed through to the process_record() function.
         """
 
@@ -196,7 +197,9 @@ class BaseConvert(object):
         try:
             # Restructure to 'site' format if necessary
             if self.infile_structure != 'site':
-                file_to_process = f'{self.infile}.site.tmp'
+                file_to_process = f'{self.infile}.site'
+                if not kwargs.get('keep_intermediate_files', False):
+                    file_to_process += '.tmp'
                 self._temp_files.append(file_to_process)
                 # Restructure file to site format for processing
                 postprocessing_logger.info(f'Restructuring file {self.infile} --> {file_to_process}')
@@ -206,7 +209,9 @@ class BaseConvert(object):
 
             # Prepare to restructure after processing, if necessary
             if self.outfile_structure != 'site':
-                processed_file = f'{self.outfile}.site.tmp'
+                processed_file = f'{self.outfile}.site'
+                if not kwargs.get('keep_intermediate_files', False):
+                    processed_file += '.tmp'
                 self._temp_files.append(processed_file)
             else:
                 processed_file = self.outfile
@@ -281,7 +286,10 @@ class BaseConvert(object):
             postprocessing_logger.error(traceback.print_exc())
             raise e
         finally:
-            self._remove_temp_files()
+            if kwargs.get('keep_intermediate_files', False):
+                self._temp_files = []
+            else:
+                self._remove_temp_files()
 
     def _remove_temp_files(self):
         """
