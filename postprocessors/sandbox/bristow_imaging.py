@@ -161,16 +161,23 @@ class BristowImaging(BaseConvert):
         # Output shape afterwards is [num_sequences, num_antennas*num_antennas, num_range_gates, num_lags]
         main_antenna_corrs_unavg = BristowImaging.correlations_from_samples(antennas_data[:main_antenna_count],
                                                                             record)
+
+        # import matplotlib.pyplot as plt
+        # fig, ax = plt.subplots(1, 1)
+        # ax.imshow(np.mean(main_antenna_corrs_unavg[:, :, 20, 0], axis=0).reshape((16, 16)).real, aspect='equal', origin='lower', cmap='RdBu')
+        # plt.show()
+        # plt.close()
+
         # intf_antenna_corrs_unavg = BristowImaging.correlations_from_samples(antennas_data[main_antenna_count:],
         #                                                                     record)
 
         # Apply taper to the correlations
-        window = np.array([0.08081232549588463, 0.12098514265395757, 0.23455777475180511, 0.4018918165398586,
-                           0.594054435182454, 0.7778186328978896, 0.9214100134552521, 1.0,
-                           1.0, 0.9214100134552521, 0.7778186328978896, 0.594054435182454,
-                           0.4018918165398586, 0.23455777475180511, 0.12098514265395757, 0.08081232549588463])
-        square_window = np.minimum.outer(window, window).reshape((-1,))
-        main_antenna_corrs_unavg = np.einsum('sarl,a->sarl', main_antenna_corrs_unavg, square_window)
+        # window = np.array([0.08081232549588463, 0.12098514265395757, 0.23455777475180511, 0.4018918165398586,
+        #                    0.594054435182454, 0.7778186328978896, 0.9214100134552521, 1.0,
+        #                    1.0, 0.9214100134552521, 0.7778186328978896, 0.594054435182454,
+        #                    0.4018918165398586, 0.23455777475180511, 0.12098514265395757, 0.08081232549588463])
+        # square_window = np.minimum.outer(window, window).reshape((-1,))
+        # main_antenna_corrs_unavg = np.einsum('sarl,a->sarl', main_antenna_corrs_unavg, square_window)
 
         # Use least squares inversion to estimate the scattering cross-section
         # [num_beams, num_ranges, num_lags]
@@ -431,7 +438,7 @@ class BristowImaging(BaseConvert):
 
         # Now correlate antenna to antenna and reshape to the final shape
         # [num_sequences, num_antennas*num_antennas, num_range_gates, num_lags]
-        values = np.einsum('sajk,sbjk->sabjk', values, values.conj()).reshape(
+        values = np.einsum('sajk,sbjk->sabjk', values, values.conj(), optimize='greedy').reshape(
             (num_sequences, num_antennas*num_antennas, num_range_gates, num_lags))
 
         return values
