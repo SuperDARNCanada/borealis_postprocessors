@@ -214,11 +214,22 @@ class Chebyshev30dB(AntennasIQ2Rawacf):
                 2.2, 5.3, 7.2, 10.4, 14.7, 18.9, 22.4, 25.3],
     }
 
+    ### For Wallops, with 80 degree FOV, element factor considered ###
+    wallops_xcf_directions = {
+        12000: [-39.6, -34.2, -31.4, -28.3, -25.6, -22.7, -17.8, -14.2, -11.9, -8.5, -4.3, -1.4,
+                1.4, 4.2, 8.5, 11.9, 14.2, 17.8, 22.7, 25.7, 28.3, 31.4, 34.2, 39.6],
+    }
+    wallops_acf_directions = {
+        12000: [-38.3, -33.8, -31.2, -27.9, -25.1, -22.3, -17.7, -14.1, -11.9, -8.4, -4.3, -1.5,
+                1.5, 4.3, 8.4, 11.9, 14.1, 17.7, 22.3, 25.1, 27.9, 31.3, 33.8, 38.3],
+    }
+
     tx_pattern_options = {
         "original_16tx": {"acf": original_widebeam_acf_directions, "xcf": original_widebeam_xcf_directions},
         "original_8tx": {"acf": original_8tx_widebeam_acf_directions, "xcf": original_widebeam_xcf_directions},
         "60deg_fov_droopy": {"acf": widebeam_60deg_droop_acf_directions, "xcf": widebeam_60deg_droop_xcf_directions},
         "60deg_fov": {"acf": widebeam_60deg_acf_directions, "xcf": widebeam_60deg_xcf_directions},
+        "wallops": {"acf": wallops_acf_directions, "xcf": wallops_xcf_directions},
     }
 
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str, **kwargs):
