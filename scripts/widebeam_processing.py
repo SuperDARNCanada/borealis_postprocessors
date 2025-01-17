@@ -13,6 +13,8 @@ if __name__ == '__main__':
     parser.add_argument('--pattern', help='Pattern to search for when globbing files from indir',
                         default='*antennas_iq.hdf5.site')
     parser.add_argument('--dmap', help='Process files to DMAP?', action='store_true')
+    parser.add_argument('tx_pattern', help="Type of TX radiation pattern that was used. "
+                                           "See chebyshev_30db.py for options.")
     args = parser.parse_args()
     in_directory = args.indir
     out_directory = args.outdir
@@ -43,7 +45,7 @@ if __name__ == '__main__':
             if not os.path.isfile(rawacf_path):
                 print(f'\t-> {rawacf_path}')
                 processor = Chebyshev30dB(path, rawacf_path, input_structure, output_structure)
-                processor.process_file(num_processes=10, keep_intermediate_files=False, tx_pattern="original_16tx")
+                processor.process_file(num_processes=10, keep_intermediate_files=False, tx_pattern=args.tx_pattern)
 
             # Process the file to dmap
             if args.dmap and not os.path.isfile(dmap_path):
