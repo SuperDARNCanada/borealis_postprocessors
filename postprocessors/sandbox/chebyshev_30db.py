@@ -272,6 +272,10 @@ class Chebyshev30dB(AntennasIQ2Rawacf):
         acf_directions = cls.tx_pattern_options[tx_pattern]["acf"]
         xcf_directions = cls.tx_pattern_options[tx_pattern]["xcf"]
 
+        pulses_in_samples = [p * int(round(record['tau_spacing'] / record['tx_pulse_len'])) for p in record['pulses']]
+        blanked_samples = pulses_in_samples + [p + 1 for p in pulses_in_samples]
+        record['blanked_samples'] = sorted(blanked_samples)
+
         acf_record = copy.deepcopy(record)
         beam_nums = record['beam_nums']
         freq_khz = record['freq']
