@@ -297,9 +297,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         """
         # TODO: Get this from somewhere, probably linked to the experiment ran. Might need to look up
         #   based on githash
-        first_range = 180.0  # scf.FIRST_RANGE
-
-        return np.float32(first_range)
+        return record.get("first_range", np.float32(180.0))
 
     @classmethod
     def calculate_first_range_rtt(cls, record: OrderedDict) -> float:
@@ -317,9 +315,10 @@ class AntennasIQ2Bfiq(BaseConvert):
             Time that it takes signal to travel to first range gate and back, in microseconds
         """
         # km * (there and back) * (km to meters) * (seconds to us) / c
-        first_range_rtt = record['first_range'] * 2.0 * 1.0e3 * 1e6 / speed_of_light
-
-        return np.float32(first_range_rtt)
+        return record.get(
+            "first_range_rtt",
+            np.float32(record['first_range'] * 2.0 * 1.0e3 * 1e6 / speed_of_light)
+        )
 
     @classmethod
     def create_lag_table(cls, record: OrderedDict) -> np.array:
@@ -340,6 +339,9 @@ class AntennasIQ2Bfiq(BaseConvert):
             are sorted in ascending order based on difference between the pulses, and finally appended
             with an alternate lag-zero pulse [last_pulse, last_pulse].
         """
+        if "lags" in record:
+            return record["lags"]
+
         lag_table = list(itertools.combinations(record['pulses'], 2))   # Create all combinations of lags
         lag_table.append([record['pulses'][0], record['pulses'][0]])    # lag 0
         lag_table = sorted(lag_table, key=lambda x: x[1] - x[0])        # sort by lag number
@@ -364,9 +366,10 @@ class AntennasIQ2Bfiq(BaseConvert):
             The separation between adjacent ranges, in km.
         """
         # (1 / (sample rate)) * c / (km to meters) / 2
-        range_sep = 1 / record['rx_sample_rate'] * speed_of_light / 1.0e3 / 2.0
-
-        return np.float32(range_sep)
+        return record.get(
+            "range_sep",
+            np.float32(1 / record['rx_sample_rate'] * speed_of_light / 1.0e3 / 2.0)
+        )
 
     @classmethod
     def get_number_of_ranges(cls, record: OrderedDict) -> int:
@@ -383,6 +386,9 @@ class AntennasIQ2Bfiq(BaseConvert):
         num_ranges: int
             The number of ranges of the data
         """
+        if "num_ranges" in record:
+            return record["num_ranges"]
+
         # Infer the number of ranges from the record metadata
         first_range_offset = cls.calculate_first_range_rtt(record) * 1e-6 * record['rx_sample_rate']
         tau_in_samples = int(round(record['tau_spacing'] * 1e-6 * record['rx_sample_rate']))

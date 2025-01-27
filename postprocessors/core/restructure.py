@@ -38,7 +38,7 @@ def read_group(group: h5py.Group, file_type: str):
                 itemsize = dset.attrs.get('itemsize', STRING_DATASET_SIZES[file_type][dset_name])
                 data = dset[:].view(dtype=(np.str_, itemsize))
         else:
-            data = dset[:]  # non-string, can simply load
+            data = dset[()]  # non-string, can simply load
         group_dict[dset_name] = data
 
     # Get the attributes (scalar fields)

@@ -5,7 +5,7 @@ import h5py
 import deepdish as dd
 from datetime import datetime
 
-from postprocessors import ConvertFile, borealis_to_borealis_rename
+from postprocessors import ConvertFile, b2b_rename
 from postprocessors.sandbox.widebeam_antennas_iq_to_bfiq import WidebeamAntennasIQ2Bfiq
 from postprocessors.sandbox.bistatic_processing import BistaticProcessing
 
@@ -43,9 +43,9 @@ def main(in_directory: str, out_directory: str, out_struct: str, search_pattern:
 
         filename = os.path.basename(path)
 
-        bfiq_file = borealis_to_borealis_rename(filename, 'bfiq', out_struct)
-        rawacf_site = borealis_to_borealis_rename(filename, 'rawacf', 'site')
-        rawacf_array = borealis_to_borealis_rename(filename, 'rawacf', 'array')
+        bfiq_file = b2b_rename(filename, 'bfiq', out_struct)
+        rawacf_site = b2b_rename(filename, 'rawacf', 'site')
+        rawacf_array = b2b_rename(filename, 'rawacf', 'array')
 
         bfiq_path = f'{out_directory}/{bfiq_file}'
         rawacf_site_path = f'{out_directory}/{rawacf_site}'

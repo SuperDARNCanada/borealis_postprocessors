@@ -54,13 +54,20 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
     formatted_record, idx: properly-formatted processed record and the index which was processed.
     """
     with h5py.File(filename, 'r') as hdf5_file:
-        record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
+        version = kwargs.get("version", 0)
+        if version > 0:
+            record_dict = hdf5_file[record_keys[idx]]
+        else:
+            record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
         record_list = []  # List of all 'extra' records to process
 
         # If processing multiple records at a time, get all the records ready
         if records_per_process > 1:
             for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
-                record_list.append(rs.read_group(hdf5_file[record_keys[num]], file_type))
+                if version > 0:
+                    record_list.append(hdf5_file[record_keys[num]])
+                else:
+                    record_list.append(rs.read_group(hdf5_file[record_keys[num]], file_type))
 
     processed_record = processing_fn(record_dict, extra_records=record_list, **kwargs)
 
@@ -68,7 +75,10 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         return None, idx
     else:
         # Convert to numpy arrays for saving to file
-        formatted_record = rs.convert_to_numpy(processed_record)
+        if version > 0:
+            formatted_record = processed_record
+        else:
+            formatted_record = rs.convert_to_numpy(processed_record)
         return formatted_record, idx
 
 

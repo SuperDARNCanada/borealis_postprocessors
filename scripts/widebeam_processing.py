@@ -4,6 +4,7 @@ import argparse
 
 import postprocessors
 from postprocessors import ConvertFile
+from postprocessors.core.antennas_iq_to_rawacf import AntennasIQ2Rawacf
 from postprocessors.sandbox.chebyshev_30db import Chebyshev30dB
 
 if __name__ == '__main__':
@@ -25,15 +26,15 @@ if __name__ == '__main__':
             continue
         if not os.path.isfile(path):
             continue
-        if path.endswith(".site"):
+        if path.endswith(".h5") or path.endswith(".site"):
             input_structure = "site"
         else:
             input_structure = "array"
 
         filename = os.path.basename(path)
 
-        rawacf_file = postprocessors.borealis_to_borealis_rename(filename, 'rawacf', 'site')
-        dmap_file = postprocessors.borealis_to_sdarn_rename(filename, 'rawacf')
+        rawacf_file = postprocessors.b2b_rename(filename, 'rawacf', 'site')
+        dmap_file = postprocessors.b2sd_rename(filename, 'rawacf')
         rawacf_path = out_directory + '/' + rawacf_file
         dmap_path = out_directory + '/' + dmap_file
         print(f'{path}')
