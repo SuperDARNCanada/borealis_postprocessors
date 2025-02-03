@@ -13,7 +13,7 @@ from typing import Union
 import numpy as np
 from scipy.constants import speed_of_light
 
-from postprocessors import BaseConvert
+from postprocessors import BaseConvert, ProcessBfiq2Rawacf
 try:
     import cupy as xp
 except ImportError:
@@ -159,8 +159,8 @@ class BristowImaging(BaseConvert):
 
         # Compute antenna correlations.
         # Output shape afterwards is [num_sequences, num_antennas*num_antennas, num_range_gates, num_lags]
-        main_antenna_corrs_unavg = BristowImaging.correlations_from_samples(antennas_data[:main_antenna_count],
-                                                                            record)
+        # main_antenna_corrs_unavg = BristowImaging.correlations_from_samples(antennas_data[:main_antenna_count],
+        #                                                                     record)
 
         # import matplotlib.pyplot as plt
         # fig, ax = plt.subplots(1, 1)
@@ -179,12 +179,16 @@ class BristowImaging(BaseConvert):
         # square_window = np.minimum.outer(window, window).reshape((-1,))
         # main_antenna_corrs_unavg = np.einsum('sarl,a->sarl', main_antenna_corrs_unavg, square_window)
 
+        # [num_sequences, num_antennas * num_antennas, num_samps]
+        visibilities = BristowImaging.calc_visibilities(antennas_data[:main_antenna_count])
+
         # Use least squares inversion to estimate the scattering cross-section
-        # [num_beams, num_ranges, num_lags]
-        main_corrs = BristowImaging.least_squares_inversion(main_antenna_corrs_unavg, rx_beam_azms, freq,
-                                                            main_antenna_spacing)
+        # [num_sequences, num_beams, num_samps]
+        main_sky = BristowImaging.least_squares_inversion(visibilities, rx_beam_azms, freq, main_antenna_spacing)
         # intf_corrs = BristowImaging.least_squares_inversion(intf_antenna_corrs_unavg, rx_beam_azms, freq,
         #                                                     intf_antenna_spacing)
+
+        main_corrs = np.mean(ProcessBfiq2Rawacf.correlations_from_samples(main_sky, main_sky, record), axis=0)
 
         record['main_acfs'] = main_corrs
         record['intf_acfs'] = np.zeros(main_corrs.shape, dtype=main_corrs.dtype)
@@ -225,16 +229,16 @@ class BristowImaging(BaseConvert):
         return record
 
     @staticmethod
-    def least_squares_inversion(correlations, beam_azms, freq, antenna_spacing):
+    def least_squares_inversion(viz, beam_azms, freq, antenna_spacing):
         """
         Calculates the least squares inversion of Ax = b, retrieving the correlation
         values at each beam, range, and lag.
 
-        :param correlations:    Antenna correlation values for each range and lag
+        :param viz:             Visibilities for every time
         :param beam_azms:       Beam directions. ndarray of floats (degrees)
         :param freq:            Transmit frequency. kHz
         :param antenna_spacing: Spacing between adjacent antennas. Meters.
-        :return: The correlations for each beam, range, and lag
+        :return: The sky estimate for each beam and time
         """
         dtype = xp.complex64
         # Useful quantities
@@ -243,13 +247,13 @@ class BristowImaging(BaseConvert):
         wave_num = 2.0 * np.pi * (freq * 1000.0) / speed_of_light
 
         # Some useful dimensions
-        num_sequences, num_ant_squared, num_ranges, num_lags = correlations.shape
+        num_sequences, num_ant_squared, num_samps = viz.shape
         num_ant = int(round(np.sqrt(num_ant_squared)))
 
-        correlations = xp.asarray(correlations, dtype=dtype)
+        viz = xp.asarray(viz, dtype=dtype)
 
         # [num_ranges, num_lags, num_ant*num_ant]
-        avg_correlations = xp.einsum('sarl->rla', correlations, dtype=dtype) / num_sequences
+        # avg_correlations = xp.einsum('sarl->rla', correlations, dtype=dtype) / num_sequences
 
         # # Get the mean correlation vector
         #
@@ -279,15 +283,26 @@ class BristowImaging(BaseConvert):
         elongated_phase_matrix = np.reshape(phase_matrix, (num_ant_squared, num_beams))
         elongated_phase_matrix = xp.asarray(elongated_phase_matrix, dtype=dtype)
 
+        alpha = 0.1  # regularization parameter
+        regularization_rows = alpha * xp.identity(num_beams)  # [num_beams, num_beams]
+        regularized_B = xp.vstack([elongated_phase_matrix, regularization_rows])  # now [num_ant**2 + num_beams, num_beams]
+        regularized_B_inv = xp.linalg.pinv(regularized_B)
+
+        regularized_viz_shape = (num_sequences, num_ant_squared + num_beams, num_samps)
+        regularized_viz = xp.zeros(regularized_viz_shape, dtype=dtype)
+        regularized_viz[:, :num_ant_squared, ...] = viz  # essentially just zero-padding one dimension
+
+        # resulting shape: [num_sequences, num_beams, num_samps]
+        sky = xp.einsum('ba,sai->sbi', regularized_B_inv, regularized_viz)
 
         # TODO: Compare with scipy.linalg.pinv and scipy.linalg.lstsq
         # Solve the least squares problem with Moore-Penrose pseudo inverse method
-        pseudo_inv = np.linalg.pinv(elongated_phase_matrix)
+        # pseudo_inv = np.linalg.pinv(elongated_phase_matrix)
         #
         # pseudo_inv:             [num_beams, num_ant*num_ant]
         # avg_correlations:       [num_ranges, num_lags, num_ant*num_ant]
         # corrs:                  [num_beams, num_ranges, num_lags]
-        corrs = xp.einsum('ba,rla->brl', pseudo_inv, avg_correlations)
+        # corrs = xp.einsum('ba,rla->brl', pseudo_inv, avg_correlations)
 
         # [num_ranges, num_lags, num_beams, num_ant*num_ant]
         # bh_cov_inv = xp.einsum('ca,rlab->rlcb', elongated_phase_matrix.T.conj(), cov_inv, dtype=dtype)
@@ -302,9 +317,18 @@ class BristowImaging(BaseConvert):
         # corrs = xp.einsum('rlbc,rlb->crl', first_term, second_term, dtype=dtype)
 
         if cupy_available:
-            corrs = xp.asnumpy(corrs)
+            sky = xp.asnumpy(sky)
 
-        return corrs
+        return sky
+
+    @staticmethod
+    def calc_visibilities(samples):
+        """Calculate all visibilities"""
+        num_antennas, num_sequences, num_samps = samples.shape
+        values = np.einsum('asi,bsi->sabi', samples, samples.conj(), optimize='greedy').reshape(
+            (num_sequences, num_antennas*num_antennas, num_samps)
+        )
+        return values
 
     @staticmethod
     def correlations_from_samples(samples, record):
