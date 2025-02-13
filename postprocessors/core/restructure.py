@@ -27,6 +27,12 @@ def read_group(group: h5py.Group, file_type: str):
         of the hdf5 group.
     """
     group_dict = {}
+    descriptions = {}
+    units = {}
+    dim_labels = {}
+    dim_scales = {}
+    dim_nicknames = {}
+
     # Get the datasets (vector fields)
     datasets = list(group.keys())
     for dset_name in datasets:
@@ -40,6 +46,60 @@ def read_group(group: h5py.Group, file_type: str):
         else:
             data = dset[()]  # non-string, can simply load
         group_dict[dset_name] = data
+
+        # load in the dataset metadata for v1.0+ files
+        if 'description' in dset.attrs.keys():
+            descriptions[dset_name] = dset.attrs['description']
+        if 'units' in dset.attrs.keys():
+            units[dset_name] = dset.attrs['units']
+
+        # Get all the information about Dimension Scales from the group
+        labels = []
+        nicknames = []
+        scales = []
+        for dim in dset.dims:
+            labels.append(dim.label)  # this is the easy-to-read name, e.g. "range"
+            if dset.is_scale:
+                continue
+            scale_nicknames = dim.keys()  # e.g. the `range_gate` field has a nickname `range gate`
+            if len(scale_nicknames) == 0:
+                continue
+            elif len(scale_nicknames) > 1:  # Could be multiple dim scales for a single dimension
+                nested_scales = []
+                nested_nicknames = []
+                for i, name in enumerate(scale_nicknames):
+                    dim_field = dim[i]  # get the actual dataset that is the dimension scale, e.g. the `range_gate` dataset
+                    scale = dim_field.name.split('/')[-1]  # get the name of that dataset, e.g. `range_gate`
+                    if name == '':
+                        nickname = scale
+                    else:
+                        nickname = name
+                    dim_nicknames[scale] = nickname  # record the nickname (`range gate`) for that dimension scale dataset (`range_gate`)
+                    nested_scales.append(scale)  # e.g. add `range_gate` to the list of dimension scale datasets
+                    nested_nicknames.append(nickname)
+                scales.append(nested_scales)
+                nicknames.append(nested_nicknames)
+            else:
+                dim_field = dim[0]
+                scale = dim_field.name.split('/')[-1]
+                scales.append(scale)
+                if scale_nicknames[0] == '':
+                    nickname = scale
+                else:
+                    nickname = scale_nicknames[0]
+                dim_nicknames[scale] = nickname
+                nicknames.append(nickname)
+        if len(labels) > 0:
+            dim_labels[dset_name] = labels
+        if len(scales) > 0:
+            dim_scales[dset_name] = scales  # Possibly nested list of dsets associated with each dim
+
+    if len(descriptions) > 0:  # descriptions are required for Borealis v1.0+, so this essentially is flagging v1.0 files
+        group_dict['descriptions'] = descriptions
+        group_dict['units'] = units
+        group_dict['dim_labels'] = dim_labels
+        group_dict['dim_scales'] = dim_scales
+        group_dict['dim_nicknames'] = dim_nicknames
 
     # Get the attributes (scalar fields)
     attribute_dict = {}
@@ -77,18 +137,129 @@ def write_records(hdf5_file: h5py.File, records: dict):
     """
     for group_name, group_dict in records.items():
         group = hdf5_file.create_group(str(group_name))
-        for k, v in group_dict.items():
-            if isinstance(v, str):
-                group.attrs[k] = np.bytes_(v)
-            elif isinstance(v, np.ndarray):
-                if v.dtype.type == np.str_:
-                    dset = group.create_dataset(k, data=v.view(dtype=np.uint8))
-                    dset.attrs['strtype'] = b'unicode'
-                    dset.attrs['itemsize'] = v.dtype.itemsize // 4  # every character is 4 bytes
+
+        if "descriptions" in group_dict.keys():  # Catches Borealis v1.0+ format, handle this differently
+            metadata = hdf5_file["metadata"]
+            dim_scales = group_dict.pop("dim_scales")
+            dim_labels = group_dict.pop("dim_labels")
+            dim_nicknames = group_dict.pop("dim_nicknames")
+            units = group_dict.pop("units")
+            descriptions = group_dict.pop("descriptions")
+
+            def write_field(name: str, is_scale=False):
+                """Write a single dataset to file, in the Borealis v1.0+ format"""
+                if name in metadata.keys():
+                    group[name] = metadata[name]  # make a hard link to the dataset in the metadata group
+                    return
+                data = group_dict[name]
+                field_metadata = {"description": descriptions[name]}
+                if name in units.keys():
+                    field_metadata["units"] = units[name]
+                if name in dim_labels.keys():
+                    field_metadata["dim_labels"] = dim_labels[name]
+                if name in dim_scales.keys():
+                    field_metadata["dim_scales"] = dim_scales[name]
+                _write_hdf5_field(name, data, field_metadata, group)
+                if is_scale:
+                    group[name].make_scale(dim_nicknames[name])
+
+            # determine which datasets are dimension scales for other datasets
+            dim_fields = set()
+            for v in dim_scales.values():
+                for d in v:  # catches nested dim scales
+                    if isinstance(d, list):
+                        dim_fields.update(d)
+                    else:
+                        dim_fields.update([d])
+            non_dim_fields = list(set(group_dict.keys()) - dim_fields)
+            dim_fields = list(dim_fields)
+
+            for k in dim_fields:  # Write the datasets that are dimension scales first
+                write_field(k)
+            for k in non_dim_fields:  # Write the datasets that are not dimension scales for other datasets last
+                write_field(k)
+
+        else:  # Borealis v0.x style
+            for k, v in group_dict.items():
+                if isinstance(v, str):
+                    group.attrs[k] = np.bytes_(v)
+                elif isinstance(v, np.ndarray):
+                    if v.dtype.type == np.str_:
+                        dset = group.create_dataset(k, data=v.view(dtype=np.uint8))
+                        dset.attrs['strtype'] = b'unicode'
+                        dset.attrs['itemsize'] = v.dtype.itemsize // 4  # every character is 4 bytes
+                    else:
+                        group.create_dataset(k, data=v)
                 else:
-                    group.create_dataset(k, data=v)
-            else:
-                group.attrs[k] = v
+                    group.attrs[k] = v
+
+
+def _write_hdf5_field(
+    name: str, data, metadata: dict, group: h5py.Group
+):
+    """
+    Write ``data`` to ``group`` along with the associated ``metadata``
+    """
+    data = _format_for_hdf5(data)
+    kw = dict()
+    if not np.isscalar(data):
+        kw = {"compression": "gzip", "compression_opts": 9}
+    group.create_dataset(name, data=data, **kw)
+    group[name].attrs["description"] = metadata.get("description")
+
+    units = metadata.get("units", None)
+    if units is not None:
+        group[name].attrs["units"] = units
+
+    dim_labels = metadata.get("dim_labels", None)
+    if dim_labels is not None:
+        if len(dim_labels) != len(data.shape):
+            raise ValueError(
+                f"{name} shape {data.shape} does not match dimension labels {dim_labels}"
+            )
+        for i, dim in enumerate(dim_labels):
+            group[name].dims[i].label = dim
+
+    if "dim_scales" in metadata.keys():
+        _associate_dim_scales(name, group, metadata["dim_scales"])
+
+
+def _associate_dim_scales(name: str, group: h5py.Group, dim_scales: list):
+    """
+    Associates fields as a [Dimension Scale](https://docs.h5py.org/en/stable/high/dims.html)
+    of another field's dimension.
+    """
+    if len(group[name].shape) != len(dim_scales):
+        raise ValueError(
+            f"{name} has incompatible dimensionality {group[name].shape} with scales {dim_scales}"
+        )
+    for i, dim in enumerate(dim_scales):
+        if dim is None:
+            continue
+        elif isinstance(dim, list):
+            for d in dim:
+                group[name].dims[i].attach_scale(group[d])
+        else:
+            group[name].dims[i].attach_scale(group[dim])
+
+
+def _format_for_hdf5(field_data):
+    """
+    Converts ``field_data`` to supported types for a Borealis HDF5 file.
+    """
+    if isinstance(field_data, dict):
+        return np.bytes_(str(field_data))
+    elif isinstance(field_data, str):
+        return np.bytes_(field_data)
+    elif isinstance(field_data, bool):
+        return np.bool_(field_data)
+    elif isinstance(field_data, list):
+        if len(field_data) > 0 and isinstance(field_data[0], str):
+            return np.bytes_(field_data)
+        else:
+            return np.array(field_data)
+    else:
+        return field_data
 
 
 def restructure(infile_name, outfile_name, infile_type, infile_structure, outfile_structure):

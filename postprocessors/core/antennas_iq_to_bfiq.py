@@ -7,6 +7,7 @@ to bfiq files.
 import itertools
 from collections import OrderedDict
 
+import h5py
 import numpy as np
 from scipy.constants import speed_of_light
 
@@ -74,17 +75,49 @@ class AntennasIQ2Bfiq(BaseConvert):
         record: OrderedDict
             hdf5 record, with new fields required by bfiq data format
         """
-        record['first_range'] = cls.calculate_first_range(record)
-        record['first_range_rtt'] = cls.calculate_first_range_rtt(record)
-        record['lags'] = cls.create_lag_table(record)
-        record['range_sep'] = cls.calculate_range_separation(record)
-        record['num_ranges'] = cls.get_number_of_ranges(record)
-        record['data'] = cls.beamform_data(record)
-        record['data_descriptors'] = cls.get_data_descriptors()
-        record['data_dimensions'] = cls.get_data_dimensions(record)
-        record['antenna_arrays_order'] = cls.change_antenna_arrays_order()
+        borealis_major_version = int(record['borealis_git_hash'].decode('utf-8').split('-')[0].lstrip('v').split('.')[0])
+        if borealis_major_version < 1:
+            record['first_range'] = cls.calculate_first_range(record)
+            record['first_range_rtt'] = cls.calculate_first_range_rtt(record)
+            record['lags'] = cls.create_lag_table(record)
+            record['range_sep'] = cls.calculate_range_separation(record)
+            record['num_ranges'] = cls.get_number_of_ranges(record)
+            record['data'] = cls.beamform_data(record)
+            record['data_descriptors'] = cls.get_data_descriptors()
+            record['data_dimensions'] = cls.get_data_dimensions(record)
+            record['antenna_arrays_order'] = cls.change_antenna_arrays_order()
+        else:
+            record['antenna_arrays'] = cls.add_antenna_arrays(record)
+            record['bfiq_data'] = cls.beamform_data(record)
+            record['descriptions']['bfiq_data'] = "Beamformed I&Q complex voltage samples for each antenna array"
+            record['units']['bfiq_data'] = "a.u. ~ V"
+            record['dim_labels']['bfiq_data'] = ["array", "sequence", "beam", "time"]
+            record['dim_scales']['bfiq_data'] = [
+                ["antenna_arrays"],
+                ["sqn_timestamps"],
+                ["beam_nums", "beam_azms"],
+                ["sample_time"],
+            ]
+            del record['antennas_iq_data']
 
         return record
+
+    @classmethod
+    def _update_metadata(cls, record: OrderedDict, metadata: h5py.Group, **kwargs):
+        """
+        Adds in metadata fields required for this file type.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing one averaging period worth of data and metadata
+        metadata: h5py.Group
+            metadata group in the output file
+        kwargs: dict
+            unused by this class
+        """
+        dset = metadata.create_dataset("antenna_arrays", data=cls.add_antenna_arrays(record))
+        dset.attrs["description"] = "Descriptor of each antenna array contained in the data"
 
     @classmethod
     def beamform_data(cls, record: OrderedDict) -> np.array:
@@ -103,49 +136,58 @@ class AntennasIQ2Bfiq(BaseConvert):
         """
         beam_azms = record['beam_azms']
         freq = record['freq']
-
-        # antennas data shape  = [num_antennas, num_sequences, num_samps]
-        antennas_data = record['data']
-
-        # Get the data and reshape
-        num_antennas, num_sequences, num_samps = record['data_dimensions']
-        antennas_data = antennas_data.reshape(record['data_dimensions'])
-
-        main_beamformed_data = np.array([], dtype=np.complex64)
-        intf_beamformed_data = np.array([], dtype=np.complex64)
-        main_antenna_count = record['main_antenna_count']
-        intf_antenna_count = record['intf_antenna_count']
-
         station = record['station']
-        main_antenna_spacing = radar_dict[station]['main_antenna_spacing']
-        intf_antenna_spacing = radar_dict[station]['intf_antenna_spacing']
 
-        antenna_indices = np.array([int(i.split('_')[-1]) for i in record['antenna_arrays_order']])
-        main_antenna_indices = np.array([i for i in antenna_indices if i < main_antenna_count])
-        intf_antenna_indices = np.array([i - main_antenna_count for i in antenna_indices if i >= main_antenna_count])
+        if 'antennas_iq_data' in record.keys():  # Borealis v1.0+ record
+            antennas_data = record['antennas_iq_data']
+            num_antennas, num_sequences, num_samps = antennas_data.shape
+            main_indices = [i for i in record['rx_antennas'] if i in record['rx_main_antennas']]
+            intf_indices = [i for i in record['rx_antennas'] if i in record['rx_intf_antennas']]
+            main_data = antennas_data[main_indices, ...]
+            intf_data = antennas_data[intf_indices, ...]
+            main_locations = record['antenna_locations'][main_indices][:, 0]  # only the x coordinate
+            intf_locations = record['antenna_locations'][intf_indices][:, 0]
+        else:
+            antennas_data = record['data']
+            num_antennas, num_sequences, num_samps = record['data_dimensions']
+            antennas_data = antennas_data.reshape(record['data_dimensions'])
+            main_antenna_count = record['main_antenna_count']
+            intf_antenna_count = record['intf_antenna_count']
+            main_antenna_spacing = radar_dict[station]['main_antenna_spacing']
+            intf_antenna_spacing = radar_dict[station]['intf_antenna_spacing']
+            intf_offset = radar_dict[station]['intf_x_offset']
+            antenna_indices = np.array([int(i.split('_')[-1]) for i in record['antenna_arrays_order']])
+            main_antenna_indices = np.array([i for i in antenna_indices if i < main_antenna_count])
+            intf_antenna_indices = np.array([i - main_antenna_count for i in antenna_indices if i >= main_antenna_count])
+
+            # Middle of array is origin, boresight is in +y direction, so antenna=0 is the most negative x-coordinate
+            main_locations = np.array([(ant - (main_antenna_count - 1) / 2.0) * main_antenna_spacing
+                                       for ant in main_antenna_indices])
+            intf_locations = np.array([(ant - (intf_antenna_count - 1) / 2.0) * intf_antenna_spacing + intf_offset
+                                       for ant in intf_antenna_indices])
+
+            main_data = antennas_data[:len(main_antenna_indices), ...]
+            intf_data = antennas_data[len(main_antenna_indices):, ...]
 
         # Loop through every sequence and beamform the data.
         # Output shape after loop is [num_sequences, num_beams, num_samps]
+        main_beamformed_data = []
+        intf_beamformed_data = []
         for sequence in range(num_sequences):
             # data input shape  = [num_antennas, num_samps]
             # data return shape = [num_beams, num_samps]
-            main_beamformed_data = \
-                np.append(main_beamformed_data, cls.beamform(antennas_data[:len(main_antenna_indices), sequence, :],
-                                                             beam_azms, freq, main_antenna_count, main_antenna_spacing,
-                                                             main_antenna_indices))
+            main_beamformed_data.append(cls.beamform(main_data[:, sequence, :], beam_azms, freq, main_locations))
 
-            intf_beamformed_data = \
-                np.append(intf_beamformed_data, cls.beamform(antennas_data[len(main_antenna_indices):, sequence, :],
-                                                             beam_azms, freq, intf_antenna_count, intf_antenna_spacing,
-                                                             intf_antenna_indices))
+            intf_beamformed_data.append(cls.beamform(intf_data[:, sequence, :], beam_azms, freq, intf_locations))
 
-        all_data = np.append(main_beamformed_data, intf_beamformed_data).flatten()
+        main_data = np.array(main_beamformed_data)
+        intf_data = np.array(intf_beamformed_data)
+        all_data = np.stack((main_data, intf_data), axis=0)
 
         return all_data
 
     @classmethod
-    def beamform(cls, antennas_data: np.array, beamdirs: np.array, rxfreq: float, ants_in_array: int, antenna_spacing: float,
-                 antenna_indices: np.array) -> np.array:
+    def beamform(cls, antennas_data: np.array, beamdirs: np.array, rxfreq: float, locations: np.array) -> np.array:
         """
         Beamforms the data from each antenna and sums to create one dataset for each beam direction.
 
@@ -158,12 +200,8 @@ class AntennasIQ2Bfiq(BaseConvert):
             Azimuthal beam directions in degrees off boresight
         rxfreq: float
             Frequency of the received beam
-        ants_in_array: int
-            Number of physical antennas in the array
-        antenna_spacing: float
-            Spacing in metres between antennas (assumed uniform)
-        antenna_indices: np.array
-            Mapping of antenna channels to physical antennas in the uniformly spaced array.
+        locations: np.array
+            x-positions of each antenna in the array
 
         Returns
         -------
@@ -177,13 +215,7 @@ class AntennasIQ2Bfiq(BaseConvert):
 
         # Loop through all beam directions
         for beam_direction in beamdirs:
-            antenna_phase_shifts = []
-
-            # Get phase shift for each antenna
-            for antenna in antenna_indices:
-                phase_shift = cls.get_phshift(beam_direction, rxfreq, antenna, ants_in_array, antenna_spacing)
-                # Bring into range (-2*pi, 2*pi)
-                antenna_phase_shifts.append(phase_shift)
+            antenna_phase_shifts = cls.get_phshift(beam_direction, rxfreq, locations)
 
             # Apply phase shift to data from respective antenna
             if num_antennas == 16:
@@ -202,8 +234,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         return beamformed_data
 
     @classmethod
-    def get_phshift(cls, beamdir: float, freq_khz: float, antenna: int, num_antennas: int, antenna_spacing: float,
-                    centre_offset: int = 0.0) -> float:
+    def get_phshift(cls, beamdir: float, freq_khz: float, locations: np.array) -> float:
         """
         Find the phase shift for a given antenna and beam direction.
         Form the beam given the beam direction (degrees off boresite), the tx frequency, the antenna number,
@@ -214,20 +245,11 @@ class AntennasIQ2Bfiq(BaseConvert):
         ----------
         beamdir: float
             The azimuthal direction of the beam off boresight, in degrees, positive beamdir being to
-            the right of the boresight (looking along boresight from ground). This is for this antenna.
+            the right of the boresight (looking along boresight from ground).
         freq_khz: float
             Transmit frequency in kHz
-        antenna: int
-            Antenna number, INDEXED FROM ZERO, zero being the leftmost antenna if looking down the boresight
-            and positive beamdir right of boresight
-        num_antennas: int
-            Number of antennas in this array
-        antenna_spacing: float
-            Distance between antennas in this array, in meters
-        centre_offset: float
-            The phase reference for the midpoint of the array. Default = 0.0, in metres.
-            Important if there is a shift in centre point between arrays in the direction along the array.
-            Positive is shifted to the right when looking along boresight (from the ground).
+        locations: np.array
+            Location (x-coordinate) of each antenna in the array.
 
         Returns
         -------
@@ -238,20 +260,10 @@ class AntennasIQ2Bfiq(BaseConvert):
         k = 2 * np.pi * freq_hz / speed_of_light        # 2pi / wavelength
 
         # Convert to radians CW of boresight direction
-        beamrad = np.pi * np.float64(beamdir) / 180.0
-
-        # Middle of array is origin, boresight is in +y direction, so antenna=0 is leftmost antenna and -ve position
-        # when looking down +y axis.
-        # E.g., for 16 antennas:
-        #   antenna = 0 -> antenna_idx = -7.5,
-        #   antenna = 1 -> antenna_idx = -6.5,
-        #   ...
-        #   antenna = 15 -> antenna_idx = 7.5
-        antenna_idx = antenna - (num_antennas - 1) / 2.0
-        antenna_position = antenna_idx * antenna_spacing + centre_offset
+        beamrad = np.deg2rad(beamdir)
 
         # phshift = 0 at origin
-        phshift = -1 * k * antenna_position * np.sin(beamrad)
+        phshift = -1 * k * locations * np.sin(beamrad)
 
         return phshift
 
@@ -386,7 +398,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         num_ranges: int
             The number of ranges of the data
         """
-        if "num_ranges" in record:
+        if "num_ranges" in record.keys():
             return record["num_ranges"]
 
         # Infer the number of ranges from the record metadata
@@ -448,20 +460,41 @@ class AntennasIQ2Bfiq(BaseConvert):
         """
         return ['main', 'intf']
 
+    @classmethod
+    def add_antenna_arrays(cls, record: OrderedDict):
+        """
+        Returns the correct field 'antenna_arrays' for a borealis v1.0+ bfiq file.
+
+        Returns
+        -------
+        List of array names
+        """
+        arrays = ['main']
+        if 'rx_intf_antennas' in record.keys() and len(record['rx_intf_antennas']) > 0:
+            arrays.append('intf')
+        return arrays
+
 
 radar_dict = {
     'sas': {'main_antenna_spacing': 15.24,
-            'intf_antenna_spacing': 15.24},
+            'intf_antenna_spacing': 15.24,
+            'intf_x_offset': 0.0},
     'pgr': {'main_antenna_spacing': 15.24,
-            'intf_antenna_spacing': 15.24},
+            'intf_antenna_spacing': 15.24,
+            'intf_x_offset': 0.0},
     'cly': {'main_antenna_spacing': 15.24,
-            'intf_antenna_spacing': 15.24},
+            'intf_antenna_spacing': 15.24,
+            'intf_x_offset': 0.0},
     'rkn': {'main_antenna_spacing': 15.24,
-            'intf_antenna_spacing': 15.24},
+            'intf_antenna_spacing': 15.24,
+            'intf_x_offset': 0.0},
     'inv': {'main_antenna_spacing': 15.24,
-            'intf_antenna_spacing': 15.24},
+            'intf_antenna_spacing': 15.24,
+            'intf_x_offset': 1.5},
     'lab': {'main_antenna_spacing': 15.24,
-            'intf_antenna_spacing': 15.24},
+            'intf_antenna_spacing': 15.24,
+            'intf_x_offset': 0.0},
     'wal': {'main_antenna_spacing': 12.8016,
-            'intf_antenna_spacing': 12.8016}
+            'intf_antenna_spacing': 12.8016,
+            'intf_x_offset': 0.0}
 }
