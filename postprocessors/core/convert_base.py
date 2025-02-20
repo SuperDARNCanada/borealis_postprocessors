@@ -28,7 +28,7 @@ postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
 def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, processing_fn,
-                       file_type: str, **kwargs):
+                       file_type: str, version: tuple, **kwargs):
     """
     Helper function for processing a single record. It is defined here to facilitate multiprocessing.
 
@@ -46,6 +46,8 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         Function to call to process a record.
     file_type: str
         File type that is being processed. One of 'antennas_iq', 'bfiq', or 'rawacf'.
+    version: tuple
+        Version numbers of the record. (major, minor[, patch])
     kwargs: dict
         Key-word arguments to pass to processing_fn
 
@@ -54,17 +56,13 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
     formatted_record, idx: properly-formatted processed record and the index which was processed.
     """
     with h5py.File(filename, 'r') as hdf5_file:
-        version = kwargs.get("version", 0)
-        # if version > 0:
-        #     record_dict = hdf5_file[record_keys[idx]]
-        # else:
         record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
         record_list = []  # List of all 'extra' records to process
 
         # If processing multiple records at a time, get all the records ready
         if records_per_process > 1:
             for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
-                if version > 0:
+                if version[0] > 0:
                     record_list.append(hdf5_file[record_keys[num]])
                 else:
                     record_list.append(rs.read_group(hdf5_file[record_keys[num]], file_type))
@@ -75,10 +73,7 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         return None, idx
     else:
         # Convert to numpy arrays for saving to file
-        if version > 0:
-            formatted_record = processed_record
-        else:
-            formatted_record = rs.convert_to_numpy(processed_record)
+        formatted_record = rs.convert_to_numpy(processed_record, version=version)
         return formatted_record, idx
 
 
@@ -215,7 +210,7 @@ class BaseConvert(object):
                 self._temp_files.append(file_to_process)
                 # Restructure file to site format for processing
                 postprocessing_logger.info(f'Restructuring file {self.infile} --> {file_to_process}')
-                rs.restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site')
+                rs.restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site', version[0])
             else:
                 file_to_process = self.infile
 
@@ -261,14 +256,14 @@ class BaseConvert(object):
                                        filename=file_to_process, record_keys=all_records,
                                        records_per_process=records_per_process,
                                        processing_fn=self.process_record, file_type=self.infile_type,
-                                       version=version[0], **kwargs)
+                                       version=version, **kwargs)
 
             # Do the processing on each record
             with h5py.File(processed_file, 'a') as outfile:
                 def append_to_file(rec):
                     """Convenience function to append to file"""
                     if rec is not None:
-                        rs.write_records(outfile, {all_records[i]: rec})
+                        rs.write_records(outfile, {all_records[i]: rec}, version=version)
 
                 def progress_bar(done_so_far, total):
                     """Convenience function to print a progress bar"""
@@ -283,8 +278,7 @@ class BaseConvert(object):
                     with h5py.File(file_to_process, 'r') as infile:
                         metadata = rs.read_group(infile['metadata'], self.infile_type)
                         first_rec = rs.read_group(infile[all_records[0]], self.infile_type)
-                    rs.write_records(outfile, {"metadata": metadata})
-                        # outfile.copy(metadata, outfile, name="metadata", expand_refs=True)  # write this first, all records link to it
+                    rs.write_records(outfile, {"metadata": metadata}, version=version)
                     self._update_metadata(first_rec, outfile["metadata"], **kwargs)
                     del first_rec  # only need it for getting all the correct metadata
 
@@ -306,7 +300,7 @@ class BaseConvert(object):
             # Restructure to final structure format, if necessary
             if self.outfile_structure != 'site':
                 postprocessing_logger.info(f'Restructuring file {processed_file} --> {self.outfile}')
-                rs.restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure)
+                rs.restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure, version[0])
         except (Exception,) as e:
             postprocessing_logger.error(f'Could not process file {self.infile} -> {self.outfile}. Removing all newly'
                                         f' generated files.')
@@ -338,7 +332,7 @@ class BaseConvert(object):
         """
         with h5py.File(self.infile, 'r') as f:
             if 'metadata' in f.keys():
-                githash = f['metadata']['borealis_git_hash'][()].decode('utf-8')
+                githash = f['metadata']['borealis_git_hash'][()]
             else:
                 if 'borealis_git_hash' in f.attrs.keys():
                     githash = f.attrs['borealis_git_hash']
@@ -346,7 +340,7 @@ class BaseConvert(object):
                     rec = sorted(list(f.keys()))[0]
                     githash = f[rec].attrs['borealis_git_hash']
 
-            version = [int(i) for i in githash.split('-')[0].lstrip('v').split('.')]
+            version = [int(i) for i in githash.decode('utf-8').split('-')[0].lstrip('v').split('.')]
         return version
 
     @classmethod

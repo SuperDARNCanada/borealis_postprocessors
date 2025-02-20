@@ -82,8 +82,11 @@ class Bfiq2Rawacf(BaseConvert):
         record['xcfs'] = correlations[2]
 
         # v0.6.1-xxxxxx -> [0, 6, 1]
-        version = [int(i) for i in record['borealis_git_hash'].decode('utf-8').split('-')[0].strip('v').split('.')]
-        if version[0] < 0:
+        githash = record['borealis_git_hash']
+        if isinstance(githash, bytes):
+            githash = githash.decode('utf-8')
+        version = [int(i) for i in githash.split('-')[0].strip('v').split('.')]
+        if version[0] == 0:
             if version[1] < 7:
                 record['correlation_descriptors'] = cls.get_correlation_descriptors()
                 record['correlation_dimensions'] = cls.get_correlation_dimensions(record)

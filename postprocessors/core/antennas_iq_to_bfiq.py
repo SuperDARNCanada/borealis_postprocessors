@@ -75,7 +75,10 @@ class AntennasIQ2Bfiq(BaseConvert):
         record: OrderedDict
             hdf5 record, with new fields required by bfiq data format
         """
-        borealis_major_version = int(record['borealis_git_hash'].decode('utf-8').split('-')[0].lstrip('v').split('.')[0])
+        githash = record['borealis_git_hash']
+        if isinstance(githash, bytes):
+            githash = githash.decode('utf-8')
+        borealis_major_version = int(githash.split('-')[0].lstrip('v').split('.')[0])
         if borealis_major_version < 1:
             record['first_range'] = cls.calculate_first_range(record)
             record['first_range_rtt'] = cls.calculate_first_range_rtt(record)
@@ -450,7 +453,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         return new_dimensions
 
     @classmethod
-    def change_antenna_arrays_order(cls) -> list:
+    def change_antenna_arrays_order(cls) -> np.array:
         """
         Returns the correct field 'antenna_arrays_order' for a bfiq file
 

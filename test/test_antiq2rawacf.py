@@ -6,32 +6,43 @@ import postprocessors as pp
 from test.utils.compare_files import compare_files
 
 if __name__ == '__main__':
-    array_infile = 'antennas_iq.hdf5'
-    site_infile = 'antennas_iq.hdf5.site'
-    site_outfile = 'test_antiq2rawacf.hdf5.site'
-    array_outfile = 'test_antiq2rawacf.hdf5'
 
-    compare_site_file = 'rawacf.alt.hdf5.site'
-    compare_array_file = 'rawacf.alt.hdf5'
+    versions = [
+        "v0.5",
+        "v0.7",
+        "v1.0"
+    ]
 
-    # Convert from site file to both site and array files
-    pp.ConvertFile(site_infile, site_outfile, 'antennas_iq', 'rawacf', 'site', 'site')
-    compare_files(compare_site_file, site_outfile)
+    array_infile = '{}/antennas_iq.array'
+    site_infile = '{}/antennas_iq.site'
+    site_outfile = 'test_antiq2rawacf.site'
+    array_outfile = 'test_antiq2rawacf.array'
 
-    pp.ConvertFile(site_infile, array_outfile, 'antennas_iq', 'rawacf', 'site', 'array')
-    compare_files(compare_array_file, array_outfile)
+    compare_site_file = '{}/rawacf.site'
+    compare_array_file = '{}/rawacf.array'
 
-    # Remove the generated files
-    os.remove(site_outfile)
-    os.remove(array_outfile)
+    for version in versions:
+        print(version)
+        if os.path.isfile(site_infile.format(version)):
+            # convert site -> site
+            if os.path.isfile(compare_site_file.format(version)):
+                pp.ConvertFile(site_infile.format(version), site_outfile, 'antennas_iq', 'rawacf', 'site', 'site')
+                compare_files(compare_site_file.format(version), site_outfile)
+                os.remove(site_outfile)
 
-    # Convert from array file to both site and array files
-    pp.ConvertFile(array_infile, site_outfile, 'antennas_iq', 'rawacf', 'array', 'site')
-    compare_files(compare_site_file, site_outfile)
+            if int(version[1]) == 0:
+                # convert site -> array:
+                pp.ConvertFile(site_infile.format(version), array_outfile, 'antennas_iq', 'rawacf', 'site', 'array')
+                compare_files(compare_array_file.format(version), array_outfile)
+                os.remove(array_outfile)
 
-    pp.ConvertFile(array_infile, array_outfile, 'antennas_iq', 'rawacf', 'array', 'array')
-    compare_files(compare_array_file, array_outfile)
+        if os.path.isfile(array_infile.format(version)):
+            # convert array -> site
+            pp.ConvertFile(array_infile.format(version), site_outfile, 'antennas_iq', 'rawacf', 'array', 'site')
+            compare_files(compare_site_file.format(version), site_outfile)
+            os.remove(site_outfile)
 
-    # Remove the generate files
-    os.remove(site_outfile)
-    os.remove(array_outfile)
+            # convert array -> array
+            pp.ConvertFile(array_infile.format(version), array_outfile, 'antennas_iq', 'rawacf', 'array', 'array')
+            compare_files(compare_array_file.format(version), array_outfile)
+            os.remove(array_outfile)

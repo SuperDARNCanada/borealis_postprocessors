@@ -59,7 +59,7 @@ def read_group(group: h5py.Group, file_type: str):
         scales = []
         for dim in dset.dims:
             labels.append(dim.label)  # this is the easy-to-read name, e.g. "range"
-            if dset.is_scale:
+            if h5py.h5ds.is_scale(dset._id):
                 continue
             scale_nicknames = dim.keys()  # e.g. the `range_gate` field has a nickname `range gate`
             if len(scale_nicknames) == 0:
@@ -124,7 +124,7 @@ def read_group(group: h5py.Group, file_type: str):
     return group_dict
 
 
-def write_records(hdf5_file: h5py.File, records: dict):
+def write_records(hdf5_file: h5py.File, records: dict, version=(0, 5)):
     """
     Write the record to file.
 
@@ -134,11 +134,13 @@ def write_records(hdf5_file: h5py.File, records: dict):
        HDF5 file to write records to.
     records: dict
         Dictionary containing fields to write to file.
+    version: tuple
+        Version numbers of the record. (major, minor[, patch])
     """
     for group_name, group_dict in records.items():
         group = hdf5_file.create_group(str(group_name))
 
-        if "descriptions" in group_dict.keys():  # Catches Borealis v1.0+ format, handle this differently
+        if version[0] > 0:
             metadata = hdf5_file["metadata"]
             dim_scales = group_dict.pop("dim_scales")
             dim_labels = group_dict.pop("dim_labels")
@@ -185,9 +187,12 @@ def write_records(hdf5_file: h5py.File, records: dict):
                     group.attrs[k] = np.bytes_(v)
                 elif isinstance(v, np.ndarray):
                     if v.dtype.type == np.str_:
-                        dset = group.create_dataset(k, data=v.view(dtype=np.uint8))
-                        dset.attrs['strtype'] = b'unicode'
-                        dset.attrs['itemsize'] = v.dtype.itemsize // 4  # every character is 4 bytes
+                        if version[1] == 5:  # version 0.5
+                            dset = group.create_dataset(k, data=v.view(dtype=np.uint8))
+                            dset.attrs['strtype'] = b'unicode'
+                            dset.attrs['itemsize'] = v.dtype.itemsize // 4  # every character is 4 bytes
+                        else:
+                            group.create_dataset(k, data=np.bytes_(v))
                     else:
                         group.create_dataset(k, data=v)
                 else:
@@ -262,7 +267,7 @@ def _format_for_hdf5(field_data):
         return field_data
 
 
-def restructure(infile_name, outfile_name, infile_type, infile_structure, outfile_structure):
+def restructure(infile_name, outfile_name, infile_type, infile_structure, outfile_structure, version=0):
     """
     This method restructures filename of structure "file_structure" into "final_structure".
 
@@ -278,6 +283,8 @@ def restructure(infile_name, outfile_name, infile_type, infile_structure, outfil
         The current write structure of the file. One of 'array' or 'site'.
     outfile_structure: str
         The desired write structure of the file. One of 'array', 'site', 'iqdat', or 'dmap'.
+    version: int
+        The major version of Borealis that generated infile
     """
     # dmap and iqdat are not borealis formats, so they are handled specially
     if outfile_structure == 'dmap' or outfile_structure == 'iqdat':
@@ -285,19 +292,32 @@ def restructure(infile_name, outfile_name, infile_type, infile_structure, outfil
                                  borealis_file_structure=infile_structure)
         return
 
-    pydarnio.BorealisRestructure(infile_name, outfile_name, infile_type, outfile_structure)
+    if version == 0:
+        pydarnio.BorealisRestructure(infile_name, outfile_name, infile_type, outfile_structure)
+    else:
+        if outfile_structure != "site":
+            raise ValueError(f"Cannot restructure Borealis v1.0+ files into structure {outfile_structure}. "
+                             f"Supported structures are ['site', 'dmap', 'iqdat'].")
 
 
-def convert_to_numpy(data: dict):
+def convert_to_numpy(data: dict, version=(0, 5)):
     """Converts lists stored in dict into numpy array. Recursive.
     Args:
-        data (Python dictionary): Dictionary with lists to convert to numpy arrays.
+        data (dict): Dictionary with lists to convert to numpy arrays.
+        version (tuple): (major, minor[, patch]) version numbers
     """
+    if version[0] > 0:
+        return data
+
     for k, v in data.items():
-        if isinstance(v, dict):
-            convert_to_numpy(v)
-        elif isinstance(v, list):
-            data[k] = np.array(v)
+        if isinstance(v, list):
+            if len(v) > 0 and isinstance(v[0], str):
+                if version[1] > 5:  # v0.6, v0.6.1, v0.7
+                    data[k] = np.bytes_(v)
+                else:
+                    data[k] = np.array(v)
+            else:
+                data[k] = np.array(v)
         else:
             continue
 
