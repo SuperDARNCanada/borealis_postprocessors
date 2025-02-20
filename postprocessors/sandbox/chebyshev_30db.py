@@ -274,7 +274,7 @@ class Chebyshev30dB(AntennasIQ2Rawacf):
 
         pulses_in_samples = [p * int(round(record['tau_spacing'] / record['tx_pulse_len'])) for p in record['pulses']]
         blanked_samples = pulses_in_samples + [p + 1 for p in pulses_in_samples]
-        record['blanked_samples'] = sorted(blanked_samples)
+        record['blanked_samples'] = np.array(sorted(blanked_samples), dtype=np.uint32)
 
         acf_record = copy.deepcopy(record)
         beam_nums = record['beam_nums']
