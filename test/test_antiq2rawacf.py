@@ -25,10 +25,9 @@ if __name__ == '__main__':
         print(version)
         if os.path.isfile(site_infile.format(version)):
             # convert site -> site
-            if os.path.isfile(compare_site_file.format(version)):
-                pp.ConvertFile(site_infile.format(version), site_outfile, 'antennas_iq', 'rawacf', 'site', 'site')
-                compare_files(compare_site_file.format(version), site_outfile)
-                os.remove(site_outfile)
+            pp.ConvertFile(site_infile.format(version), site_outfile, 'antennas_iq', 'rawacf', 'site', 'site')
+            compare_files(compare_site_file.format(version), site_outfile)
+            os.remove(site_outfile)
 
             if int(version[1]) == 0:
                 # convert site -> array:
