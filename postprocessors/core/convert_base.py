@@ -220,6 +220,8 @@ class BaseConvert(object):
                     processed_file = f'{self.outfile}.site'
                 elif self.outfile_structure != 'dmap':
                     raise ValueError("Cannot have array-structured Borealis v1.0+ file")
+                else:
+                    processed_file = f'{self.outfile}.h5'
                 if not kwargs.get('keep_intermediate_files', False):
                     processed_file += '.tmp'
                 self._temp_files.append(processed_file)

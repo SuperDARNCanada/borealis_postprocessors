@@ -237,17 +237,16 @@ class Bfiq2Rawacf(BaseConvert):
         pulses = list(record['pulses'])
 
         # First range offset in samples
-        sample_off = record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']
-        sample_off = np.int32(sample_off)
+        sample_off = np.int32(round(record['first_range_rtt'] * 1e-6 * record['rx_sample_rate']))
 
         # Helpful values converted to units of samples
-        tau_in_samples = record['tau_spacing'] * 1e-6 * record['rx_sample_rate']
+        tau_in_samples = np.int32(round(record['tau_spacing'] * 1e-6 * record['rx_sample_rate']))
         if "range_gates" in record:
             range_off = record["range_gates"] + sample_off
-            lag_pulses_as_samples = record['lag_pulses'] * np.int32(tau_in_samples)
+            lag_pulses_as_samples = record['lag_pulses'] * tau_in_samples
         else:
             range_off = np.arange(record['num_ranges'], dtype=np.int32) + sample_off
-            lag_pulses_as_samples = np.array(record['lags'], np.int32) * np.int32(tau_in_samples)
+            lag_pulses_as_samples = np.array(record['lags'], np.int32) * tau_in_samples
 
         # [num_range_gates, 1, 1]
         # [1, num_lags, 2]
