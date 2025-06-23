@@ -12,7 +12,7 @@ if __name__ == '__main__':
     parser.add_argument('indir', help='Directory containing files to process')
     parser.add_argument('outdir', help='Directory to store processed files in')
     parser.add_argument('--pattern', help='Pattern to search for when globbing files from indir',
-                        default='*antennas_iq.hdf5.site')
+                        default='*antennas_iq.h5')
     parser.add_argument('--dmap', help='Process files to DMAP?', action='store_true')
     args = parser.parse_args()
     in_directory = args.indir
@@ -44,7 +44,7 @@ if __name__ == '__main__':
             if not os.path.isfile(rawacf_path):
                 print(f'\t-> {rawacf_path}')
                 processor = Chebyshev30dB(path, rawacf_path, input_structure, output_structure)
-                processor.process_file(num_processes=10, keep_intermediate_files=False, tx_pattern="original_16tx")
+                processor.process_file(num_processes=, keep_intermediate_files=False, tx_pattern="60deg_fov")
 
             # Process the file to dmap
             if args.dmap and not os.path.isfile(dmap_path):
