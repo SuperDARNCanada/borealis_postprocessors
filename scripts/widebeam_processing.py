@@ -44,7 +44,7 @@ if __name__ == '__main__':
             if not os.path.isfile(rawacf_path):
                 print(f'\t-> {rawacf_path}')
                 processor = Chebyshev30dB(path, rawacf_path, input_structure, output_structure)
-                processor.process_file(num_processes=, keep_intermediate_files=False, tx_pattern="60deg_fov")
+                processor.process_file(num_processes=4, keep_intermediate_files=False, tx_pattern="60deg_fov")
 
             # Process the file to dmap
             if args.dmap and not os.path.isfile(dmap_path):
