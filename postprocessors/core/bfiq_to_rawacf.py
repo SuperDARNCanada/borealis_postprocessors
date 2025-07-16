@@ -130,22 +130,26 @@ class Bfiq2Rawacf(BaseConvert):
         dset = metadata.create_dataset("averaging_method", data=averaging_method)
         dset.attrs["description"] = "Averaging method, e.g. mean, median"
 
+        lag_pulse_table = cls.create_lag_table(record)
+
         if "lags" not in metadata.keys():
-            lag_pulse_table = cls.create_lag_table(record)
             dset = metadata.create_dataset("lags", data=np.arange(len(lag_pulse_table)))
             dset.attrs["description"] = "Lag indices"
             dset.make_scale("lag")
 
+        if "lag_numbers" not in metadata.keys():
             dset = metadata.create_dataset("lag_numbers", data=lag_pulse_table[1] - lag_pulse_table[0])
             dset.attrs["description"] = "Difference in units of tau_spacing of unique pairs of pulse in the pulse array"
             dset.attrs["units"] = "tau_spacing"
             dset.make_scale("lag")
 
+        if "lag_pulse_descriptors" not in metadata.keys():
             dset = metadata.create_dataset("lag_pulse_descriptors",
                                            data=np.array([b'first pulse', b'second pulse']))
             dset.attrs["description"] = "Descriptor of the pulse pairs used in a lag"
             dset.make_scale()
 
+        if "lag_pulses" not in metadata.keys():
             dset = metadata.create_dataset("lag_pulses", data=lag_pulse_table)
             dset.attrs["description"] = "Unique pairs of pulses in pulse array, in units of tau_spacing"
             dset.attrs["units"] = "tau_spacing"

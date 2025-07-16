@@ -55,8 +55,14 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
     -------
     formatted_record, idx: properly-formatted processed record and the index which was processed.
     """
+    if "metadata" in kwargs:
+        metadata = rs.read_group(kwargs["metadata"], file_type)
+    else:
+        metadata = dict()  # This is purely to avoid a bunch of if statements later checking if "metadata" in kwargs
+
     with h5py.File(filename, 'r') as hdf5_file:
         record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
+        record_dict.update(metadata)
         record_list = []  # List of all 'extra' records to process
 
         # If processing multiple records at a time, get all the records ready
@@ -65,7 +71,9 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
                 if version[0] > 0:
                     record_list.append(hdf5_file[record_keys[num]])
                 else:
-                    record_list.append(rs.read_group(hdf5_file[record_keys[num]], file_type))
+                    extra_rec = rs.read_group(hdf5_file[record_keys[num]], file_type)
+                    extra_rec.update(metadata)
+                    record_list.append(extra_rec)
 
     processed_record = processing_fn(record_dict, extra_records=record_list, **kwargs)
 
@@ -254,12 +262,6 @@ class BaseConvert(object):
             num_completed = first_idx
             indices = range(first_idx, len(all_records), records_per_process)
 
-            function_to_call = partial(processing_machine,
-                                       filename=file_to_process, record_keys=all_records,
-                                       records_per_process=records_per_process,
-                                       processing_fn=self.process_record, file_type=self.infile_type,
-                                       version=version, **kwargs)
-
             # Do the processing on each record
             with h5py.File(processed_file, 'a') as outfile:
                 def append_to_file(rec):
@@ -282,7 +284,14 @@ class BaseConvert(object):
                         first_rec = rs.read_group(infile[all_records[0]], self.infile_type)
                     rs.write_records(outfile, {"metadata": metadata}, version=version)
                     self._update_metadata(first_rec, outfile["metadata"], **kwargs)
+                    kwargs['metadata'] = outfile['metadata']
                     del first_rec  # only need it for getting all the correct metadata
+
+                function_to_call = partial(processing_machine,
+                                           filename=file_to_process, record_keys=all_records,
+                                           records_per_process=records_per_process,
+                                           processing_fn=self.process_record, file_type=self.infile_type,
+                                           version=version, **kwargs)
 
                 num_processes = kwargs.get("num_processes", 1)
                 if num_processes > 1:   # Use multiprocessing if specified
