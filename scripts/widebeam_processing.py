@@ -46,11 +46,7 @@ if __name__ == '__main__':
                 processor = Chebyshev30dB(path, rawacf_path, input_structure, output_structure)
                 processor.process_file(num_processes=4, keep_intermediate_files=False, tx_pattern="60deg_fov")
 
-            # Process the file to dmap
-            if args.dmap and not os.path.isfile(dmap_path):
-                print(f'\t-> {dmap_path}')
-                ConvertFile(rawacf_path, dmap_path, "rawacf", "rawacf", 'site', 'dmap')
-        except:
-            print("\tCould not process. Continuing...")
-            continue
-
+        # Process the file to dmap
+        if args.dmap and not os.path.isfile(dmap_path):
+            print(f'\t-> {dmap_path}')
+            ConvertFile(rawacf_path, dmap_path, "rawacf", "rawacf", 'site', 'dmap')

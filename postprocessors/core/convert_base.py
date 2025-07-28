@@ -62,6 +62,11 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
 
     with h5py.File(filename, 'r') as hdf5_file:
         record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
+        record_dict['descriptions'].update(metadata.pop('descriptions'))
+        record_dict['units'].update(metadata.pop('units'))
+        record_dict['dim_labels'].update(metadata.pop('dim_labels'))
+        record_dict['dim_scales'].update(metadata.pop('dim_scales'))
+        record_dict['dim_nicknames'].update(metadata.pop('dim_nicknames'))
         record_dict.update(metadata)
         record_list = []  # List of all 'extra' records to process
 
@@ -264,10 +269,10 @@ class BaseConvert(object):
 
             # Do the processing on each record
             with h5py.File(processed_file, 'a') as outfile:
-                def append_to_file(rec):
+                def append_to_file(rec, idx):
                     """Convenience function to append to file"""
                     if rec is not None:
-                        rs.write_records(outfile, {all_records[i]: rec}, version=version)
+                        rs.write_records(outfile, {all_records[idx]: rec}, version=version)
 
                 def progress_bar(done_so_far, total):
                     """Convenience function to print a progress bar"""
@@ -297,13 +302,13 @@ class BaseConvert(object):
                 if num_processes > 1:   # Use multiprocessing if specified
                     with get_context("spawn").Pool(num_processes) as p:
                         for completed_record, i in p.imap(function_to_call, indices):
-                            append_to_file(completed_record)
+                            append_to_file(completed_record, i)
                             num_completed += 1
                             progress_bar(num_completed, num_to_process)
                 else:   # Default single-worker
                     for idx in indices:
                         completed_record, i = function_to_call(idx)
-                        append_to_file(completed_record)
+                        append_to_file(completed_record, i)
                         num_completed += 1
                         progress_bar(num_completed, num_to_process)
                 print('\r', flush=True, end='')     # Remove the progress bar
