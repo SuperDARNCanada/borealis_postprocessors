@@ -19,7 +19,10 @@ if __name__ == '__main__':
     out_directory = args.outdir
     pattern = args.pattern
 
-    output_structure = 'site'
+    if args.dmap:
+        output_structure = 'dmap'
+    else:
+        output_structure = 'site'
 
     for path in glob.glob(f'{in_directory}/{pattern}'):
         if "antennas_iq" not in path:
@@ -33,20 +36,20 @@ if __name__ == '__main__':
 
         filename = os.path.basename(path)
 
-        rawacf_file = postprocessors.b2b_rename(filename, 'rawacf', 'site')
-        dmap_file = postprocessors.b2sd_rename(filename, 'rawacf')
-        rawacf_path = out_directory + '/' + rawacf_file
-        dmap_path = out_directory + '/' + dmap_file
+        if args.dmap:
+            outfile = postprocessors.b2sd_rename(filename, 'rawacf')
+        else:
+            outfile = postprocessors.b2b_rename(filename, 'rawacf', 'site')
+        outpath = out_directory + '/' + outfile
         print(f'{path}')
 
-        try:
-            # Process the file to rawacf
-            if not os.path.isfile(rawacf_path):
-                print(f'\t-> {rawacf_path}')
-                processor = Chebyshev30dB(path, rawacf_path, input_structure, output_structure)
-                processor.process_file(num_processes=4, keep_intermediate_files=False, tx_pattern="60deg_fov")
+        # Process the file to rawacf
+        if not os.path.isfile(outpath):
+            print(f'\t-> {outpath}')
+            processor = Chebyshev30dB(path, outpath, input_structure, output_structure)
+            processor.process_file(num_processes=8, keep_intermediate_files=False, tx_pattern="60deg_fov")
 
-        # Process the file to dmap
-        if args.dmap and not os.path.isfile(dmap_path):
-            print(f'\t-> {dmap_path}')
-            ConvertFile(rawacf_path, dmap_path, "rawacf", "rawacf", 'site', 'dmap')
+        # # Process the file to dmap
+        # if args.dmap and not os.path.isfile(dmap_path):
+        #     print(f'\t-> {dmap_path}')
+        #     ConvertFile(rawacf_path, dmap_path, "rawacf", "rawacf", 'site', 'dmap')

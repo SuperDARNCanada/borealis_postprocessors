@@ -6,6 +6,7 @@ to rawacf files, using a Chebyshev window in amplitude for beamforming to reduce
 """
 from collections import OrderedDict
 import copy
+import itertools
 
 import numpy as np
 from postprocessors import AntennasIQ2Rawacf
@@ -219,6 +220,10 @@ class Chebyshev30dB(AntennasIQ2Rawacf):
         "original_8tx": {"acf": original_8tx_widebeam_acf_directions, "xcf": original_widebeam_xcf_directions},
         "60deg_fov_droopy": {"acf": widebeam_60deg_droop_acf_directions, "xcf": widebeam_60deg_droop_xcf_directions},
         "60deg_fov": {"acf": widebeam_60deg_acf_directions, "xcf": widebeam_60deg_xcf_directions},
+        "default": {
+            "acf": {freq: [3.24 * (bmnum - 7.5) for bmnum in range(16)] for freq in range(10400, 13300, 100)},
+            "xcf": {freq: [3.24 * (bmnum - 7.5) for bmnum in range(16)] for freq in range(10400, 13300, 100)}
+        }
     }
 
     def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str, **kwargs):
@@ -260,6 +265,17 @@ class Chebyshev30dB(AntennasIQ2Rawacf):
 
         acf_directions = cls.tx_pattern_options[tx_pattern]["acf"]
         xcf_directions = cls.tx_pattern_options[tx_pattern]["xcf"]
+
+        lag_table = list(itertools.combinations(record["pulses"], 2))
+        lag_table.append(
+            [record["pulses"][0], record["pulses"][0]]
+        )  # lag 0
+        # sort by lag number
+        lag_table = sorted(lag_table, key=lambda x: x[1] - x[0])
+        lag_table.append(
+            [record["pulses"][-1], record["pulses"][-1]]
+        )  # alternate lag 0
+        record["lags"] = np.array(lag_table, dtype=np.uint32)
 
         acf_record = copy.deepcopy(record)
         beam_nums = record['beam_nums']
