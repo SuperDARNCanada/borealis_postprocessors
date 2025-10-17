@@ -192,7 +192,15 @@ def write_records(hdf5_file: h5py.File, records: dict, version=(0, 5)):
                             dset.attrs['strtype'] = b'unicode'
                             dset.attrs['itemsize'] = v.dtype.itemsize // 4  # every character is 4 bytes
                         else:
-                            group.create_dataset(k, data=np.bytes_(v))
+                            if 'descriptors' in k: #This is to work around splicing error as np.bytes_(v) when v is 'data_descriptors' fails
+                                v_dum = []
+                                for d in v:
+                                    v_dum.append(np.bytes_(d))
+                                v_dum = np.array(v_dum)
+                                group.create_dataset(k, data=v_dum)
+                            else:
+                                group.create_dataset(k, data=np.bytes_(v))
+                            # group.create_dataset(k, data=v)
                     else:
                         group.create_dataset(k, data=v)
                 else:
