@@ -34,6 +34,7 @@ class Widebeam2NormalScan(BaseConvert):
     """
     Class for conversion of Widebeam to normalscan for beam-broadening experiments. This class
     inherits from BaseConvert, which handles all functionality generic to postprocessing borealis files.
+    #note array type input does not work
 
     See Also
     --------
@@ -101,7 +102,7 @@ class Widebeam2NormalScan(BaseConvert):
                     f'"{self.outfile_type}": Valid structures for {self.outfile_type} are '
                     f'{rs.FILE_STRUCTURE_MAPPING[self.outfile_type]}'
                 )
-            if self.infile_structure not in ['array', 'site', 'dmap']:
+            if self.infile_structure not in ['array', 'site', 'dmap']: #added to accept dmap input
                 raise conversion_exceptions.ConversionUpstreamError(
                     f'Input file structure "{self.infile_structure}" cannot be reprocessed into any other format.'
                 )
@@ -110,11 +111,11 @@ class Widebeam2NormalScan(BaseConvert):
         self._temp_files = []
         self.process_file(force = True)
 
-    def binTimestamps(self, file, filetype): #sort timestamps to a corresponding beam number/index from 0-16
+    def bin_timestamps(self, file, filetype): #sort timestamps to a corresponding beam number/index from 0-16
         with h5py.File(file, 'r') as f:
             timestamps = list(f.keys())
-            indices = dict()
             timestamps.sort()
+            indices = dict()
             cnt = 0
             for i in timestamps:
                 if cnt < 16:
@@ -128,11 +129,18 @@ class Widebeam2NormalScan(BaseConvert):
     def process_file(self, **kwargs):
         """
         Applies appropriate downstream processing to convert between file types (for site-structured
-        files only). The processing chain is as follows:
-        1. Restructure to site format
-        2. Apply appropriate downstream processing by calling process_record() on each record
-        3. Restructure to final format
-        4. Remove all intermediate files created along the way
+        files and dmap input). The processing chain is as follows:
+        1. Check if the input is rawacf dmap to rawacf dmap
+            a. Read the dmap file
+            b. Find a list of timestamps to consider and assign beam numbers to them
+            c. reformat the records such that the timestamp is a key to a dictionary and each entry is a list of 16 beams
+            d. Call beam_process_2_normal() to keep the desired beam for each timestamp
+            e. Save to a dmap file
+        2. If it is not dmap input
+            a. Restructure to site format
+            b. Apply appropriate downstream processing by calling process_record() on each record
+            c. Restructure to final format
+            d. Remove all intermediate files created along the way
 
         Parameters
         ----------
@@ -154,28 +162,32 @@ class Widebeam2NormalScan(BaseConvert):
         if (self.infile_structure == 'dmap') and (self.infile_type == 'rawacf'): #Dmap input
             file_to_process = self.infile
             processed_file = self.outfile
-            sdarn_read = pydarnio.SDarnRead(file_to_process)
             postprocessing_logger.info(f'converting file {file_to_process} --> {processed_file}')
+
+            sdarn_read = pydarnio.SDarnRead(file_to_process)
             data = sdarn_read.read_rawacf()
+
             record = dict()
             all_records = [] #record names
+
             for rec in data: #Find the record names
                 all_records.append(str(rec['time.yr']) + str(rec['time.mo']) + str(rec['time.dy']) + str(rec['time.hr']) + str(rec['time.mt']) + str(rec['time.sc']) + str(rec['time.us']))
-            all_records = np.unique(all_records)
+
+            all_records = list(dict.fromkeys(all_records))
+
             for i in all_records: #reformat the records in 16 records per entry to better visualise FullFOV
                 beam_rec = []
                 for rec in data:
                     rec_time = str(rec['time.yr']) + str(rec['time.mo']) + str(rec['time.dy']) + str(
-                        rec['time.hr']) + str(
-                        rec['time.mt']) + str(rec['time.sc']) + str(rec['time.us'])
+                        rec['time.hr']) + str(rec['time.mt']) + str(rec['time.sc']) + str(rec['time.us'])
                     if rec_time == i:
                         beam_rec.append(rec)
                 record[i] = beam_rec
+
             beamedrec = self.beam_process_2_normal(all_records, record)
             pydarnio.SDarnWrite(beamedrec, processed_file).write_rawacf(processed_file)
         else:
             version = self._get_version()
-            # version = [0.7, 0.7]
             try:
                 # Restructure to 'site' format if necessary
                 if self.infile_structure != 'site':
@@ -231,7 +243,7 @@ class Widebeam2NormalScan(BaseConvert):
                 num_to_process = round(len(all_records) / records_per_process)
                 num_completed = first_idx
                 indices = range(first_idx, len(all_records), records_per_process)
-                beam_index = self.binTimestamps(file_to_process,self.infile_type) #Find beam indices associated with timestamps
+                beam_index = self.bin_timestamps(file_to_process,self.infile_type) #Find beam indices associated with timestamps
                 kwargs['beam_index'] = beam_index
                 # Do the processing on each record
                 with h5py.File(processed_file, 'a') as outfile:
@@ -299,26 +311,30 @@ class Widebeam2NormalScan(BaseConvert):
     @staticmethod
     def process_record(record: OrderedDict, **kwargs) -> OrderedDict:
         """
-        Takes a record from an rawacf file process into a rawacf record.
-        This method also keeps an single designated beam,
+        Takes a record from a rawacf file process into a rawacf record.
+        This method also keeps a single designated beam,
 
         Parameters
         ----------
         record: OrderedDict
-            hdf5 record containing antennas_iq data and metadata
-        beam_num: Union[None, str]
-            Method to use for averaging correlations across sequences. Acceptable methods are 'median' and 'mean'
+            hdf5 record containing rawacf data and metadata
+        beam_index: Dict
+            A dictionary mapping timestamp to beam index
 
         Returns
         -------
         record: OrderedDict
-            hdf5 record, with new fields required by rawacf data format
+            hdf5 record, downsampled to one beam
         """
         beam_index = kwargs.get('beam_index', None)
-        first_timestamp = int(record['sqn_timestamps'][0]*1000)
         beamkeys = list(beam_index.keys())
+
+        first_timestamp = int(record['sqn_timestamps'][0]*1000)
+        #find the closest timestamp in beam_index from first_timestamp and te index that corresponds to it
         index = np.argmin(abs(first_timestamp - np.array([int(i) for i in beamkeys])))
-        beam2keep = beam_index[beamkeys[index]]
+        beam2keep = beam_index[beamkeys[index]] #The beam to keep
+
+        #Seperate the beam to keep
         record['beam_nums'] = np.array([np.uint32(beam2keep)])
         record['beam_azms'] = np.array([record['beam_azms'][beam2keep]])
         try:
@@ -357,7 +373,7 @@ class Widebeam2NormalScan(BaseConvert):
         for i in all_records:
             if cnt < 16:
                 newrec = record[i][cnt]
-                if cnt == 0:
+                if cnt == 0: #flag the scan marker if at the start of scan
                     newrec['scan'] = np.int16(1)
                 else:
                     newrec['scan'] = np.int16(0)
@@ -365,10 +381,10 @@ class Widebeam2NormalScan(BaseConvert):
             else:
                 cnt = 0
                 newrec = record[i][cnt]
-                if cnt == 0:
+                if cnt == 0: #flag the scan marker if at the start of scan
                     newrec['scan'] = np.int16(1)
                 else:
                     newrec['scan'] = np.int16(0)
                 cnt += 1
-            beamedrec.append(newrec)
+            beamedrec.append(newrec) # add the beam to keep
         return beamedrec
