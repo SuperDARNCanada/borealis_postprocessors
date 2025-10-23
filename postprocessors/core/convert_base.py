@@ -215,8 +215,11 @@ class BaseConvert(object):
             if choice[0] not in ['y', 'Y']:
                 return 0
 
-        version = self._get_version()
         try:
+            if (self.infile_structure == 'dmap') and (self.infile_type == 'rawacf'):  # Dmap input
+                self.dmap_to_dmap(self.infile, self.outfile, **kwargs)
+                return
+            version = self._get_version()
             # Restructure to 'site' format if necessary
             if self.infile_structure != 'site':
                 if version[0] >= 1:

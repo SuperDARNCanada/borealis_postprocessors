@@ -17,6 +17,7 @@ import pydarnio
 import postprocessors.core.convert_base as cb
 import postprocessors.core.restructure as rs
 from postprocessors import conversion_exceptions
+import datetime as dt
 
 try:
     import cupy as xp
@@ -109,204 +110,7 @@ class Widebeam2NormalScan(BaseConvert):
         check_args(self)
         self.averaging_method = None
         self._temp_files = []
-        self.process_file(force = True)
-
-    def bin_timestamps(self, file, filetype): #sort timestamps to a corresponding beam number/index from 0-16
-        with h5py.File(file, 'r') as f:
-            timestamps = list(f.keys())
-            timestamps.sort()
-            indices = dict()
-            cnt = 0
-            for i in timestamps:
-                if cnt < 16:
-                    indices[i] = cnt
-                    cnt += 1
-                else:
-                    cnt = 0
-                    indices[i] = cnt
-                    cnt += 1
-        return indices
-    def process_file(self, **kwargs):
-        """
-        Applies appropriate downstream processing to convert between file types (for site-structured
-        files and dmap input). The processing chain is as follows:
-        1. Check if the input is rawacf dmap to rawacf dmap
-            a. Read the dmap file
-            b. Find a list of timestamps to consider and assign beam numbers to them
-            c. reformat the records such that the timestamp is a key to a dictionary and each entry is a list of 16 beams
-            d. Call beam_process_2_normal() to keep the desired beam for each timestamp
-            e. Save to a dmap file
-        2. If it is not dmap input
-            a. Restructure to site format
-            b. Apply appropriate downstream processing by calling process_record() on each record
-            c. Restructure to final format
-            d. Remove all intermediate files created along the way
-
-        Parameters
-        ----------
-        **kwargs: dict
-            Supported kwargs include:
-                force: bool, if True will overwrite an existing output file
-                avg_num: int, how many records are grouped together for a single process_record() call
-                num_processes: int, how many CPU cores to distribute the job across
-                keep_intermediate_files: bool, if True all intermediate files are not discarded
-            Other kwargs may be supported by child classes and will be passed through to the process_record() function.
-        """
-        if os.path.isfile(self.outfile) and not kwargs.get('force', False):
-            choice = input(f'Output file {self.outfile} already exists. Proceed anyway? Only records which don\'t '
-                           f'exist in output file will be processed. (y/n): ')
-            if choice[0] not in ['y', 'Y']:
-                return 0
-
-
-        if (self.infile_structure == 'dmap') and (self.infile_type == 'rawacf'): #Dmap input
-            file_to_process = self.infile
-            processed_file = self.outfile
-            postprocessing_logger.info(f'converting file {file_to_process} --> {processed_file}')
-
-            sdarn_read = pydarnio.SDarnRead(file_to_process)
-            data = sdarn_read.read_rawacf()
-
-            record = dict()
-            all_records = [] #record names
-
-            for rec in data: #Find the record names
-                all_records.append(str(rec['time.yr']) + str(rec['time.mo']) + str(rec['time.dy']) + str(rec['time.hr']) + str(rec['time.mt']) + str(rec['time.sc']) + str(rec['time.us']))
-
-            all_records = list(dict.fromkeys(all_records))
-
-            for i in all_records: #reformat the records in 16 records per entry to better visualise FullFOV
-                beam_rec = []
-                for rec in data:
-                    rec_time = str(rec['time.yr']) + str(rec['time.mo']) + str(rec['time.dy']) + str(
-                        rec['time.hr']) + str(rec['time.mt']) + str(rec['time.sc']) + str(rec['time.us'])
-                    if rec_time == i:
-                        beam_rec.append(rec)
-                record[i] = beam_rec
-
-            beamedrec = self.beam_process_2_normal(all_records, record)
-            pydarnio.SDarnWrite(beamedrec, processed_file).write_rawacf(processed_file)
-        else:
-            version = self._get_version()
-            try:
-                # Restructure to 'site' format if necessary
-                if self.infile_structure != 'site':
-                    if version[0] >= 1:
-                        raise ValueError("All files after Borealis v1.0 are site-structured")
-                    file_to_process = f'{self.infile}.site'
-                    if not kwargs.get('keep_intermediate_files', False):
-                        file_to_process += '.tmp'
-                    self._temp_files.append(file_to_process)
-                    # Restructure file to site format for processing
-                    postprocessing_logger.info(f'Restructuring file {self.infile} --> {file_to_process}')
-                    rs.restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site',
-                                   version[0])
-                else:
-                    file_to_process = self.infile
-
-                # Prepare to restructure after processing, if necessary
-                if self.outfile_structure != 'site':
-                    if version[0] < 1:
-                        processed_file = f'{self.outfile}.site'
-                    elif self.outfile_structure != 'dmap':
-                        raise ValueError("Cannot have array-structured Borealis v1.0+ file")
-                    else:
-                        processed_file = f'{self.outfile}.h5'
-                    if not kwargs.get('keep_intermediate_files', False):
-                        processed_file += '.tmp'
-                    self._temp_files.append(processed_file)
-                else:
-                    processed_file = self.outfile
-
-                postprocessing_logger.info(f'Converting file {file_to_process} --> {processed_file}')
-
-                # First we want to check if any records have all been done, to lighten our workload
-                finished_records = set()
-                if os.path.isfile(processed_file) and not kwargs.get('force', False):
-                    with h5py.File(processed_file, 'r') as f:
-                        finished_records = set(f.keys())
-
-                # Load record names from file
-                with h5py.File(file_to_process, 'r') as infile:
-                    all_records = sorted(list(infile.keys()))
-                    if version[0] >= 1:
-                        all_records.remove("metadata")
-
-                records_per_process = kwargs.get('avg_num', 1)  # Records getting averaged together.
-                if not kwargs.get('force', False):  # file may be partially processed, only process remaining records
-                    final_records_remaining = sorted(list(
-                        set(all_records[::records_per_process]).difference(finished_records)))
-                else:
-                    final_records_remaining = all_records[::records_per_process]
-
-                first_idx = all_records.index(final_records_remaining[0])  # first record to process
-                num_to_process = round(len(all_records) / records_per_process)
-                num_completed = first_idx
-                indices = range(first_idx, len(all_records), records_per_process)
-                beam_index = self.bin_timestamps(file_to_process,self.infile_type) #Find beam indices associated with timestamps
-                kwargs['beam_index'] = beam_index
-                # Do the processing on each record
-                with h5py.File(processed_file, 'a') as outfile:
-                    def append_to_file(rec, idx):
-                        """Convenience function to append to file"""
-                        if rec is not None:
-                            rs.write_records(outfile, {all_records[idx]: rec}, version=version)
-
-                    def progress_bar(done_so_far, total):
-                        """Convenience function to print a progress bar"""
-                        completion_percentage = done_so_far / total
-                        bar_width = 60  # arbitrary width
-                        filled = int(bar_width * completion_percentage)
-                        unfilled = bar_width - filled
-                        print(f'\r[{"=" * filled}{" " * unfilled}] {completion_percentage * 100:.2f}%', flush=True, end='')
-
-                    # Add the metadata to outfile first
-                    if version[0] >= 1:
-                        with h5py.File(file_to_process, 'r') as infile:
-                            metadata = rs.read_group(infile['metadata'], self.infile_type)
-                            first_rec = rs.read_group(infile[all_records[0]], self.infile_type)
-                        rs.write_records(outfile, {"metadata": metadata}, version=version)
-                        self._update_metadata(first_rec, outfile["metadata"], **kwargs)
-                        kwargs['metadata'] = outfile['metadata']
-                        del first_rec  # only need it for getting all the correct metadata
-
-                    function_to_call = partial(cb.processing_machine,
-                                               filename=file_to_process, record_keys=all_records,
-                                               records_per_process=records_per_process,
-                                               processing_fn=self.process_record, file_type=self.infile_type,
-                                               version=version, **kwargs)
-
-                    num_processes = kwargs.get("num_processes", 1)
-                    if num_processes > 1:  # Use multiprocessing if specified
-                        with get_context("spawn").Pool(num_processes) as p:
-                            for completed_record, i in p.imap(function_to_call, indices):
-                                append_to_file(completed_record, i)
-                                num_completed += 1
-                                progress_bar(num_completed, num_to_process)
-                    else:  # Default single-worker
-                        for idx in indices:
-                            completed_record, i = function_to_call(idx)
-                            append_to_file(completed_record, i)
-                            num_completed += 1
-                            progress_bar(num_completed, num_to_process)
-                    print('\r', flush=True, end='')  # Remove the progress bar
-
-                # Restructure to final structure format, if necessary
-                if self.outfile_structure != 'site':
-                    postprocessing_logger.info(f'Restructuring file {processed_file} --> {self.outfile}')
-                    rs.restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure,
-                                   version[0])
-            except (Exception,) as e:
-                postprocessing_logger.error(f'Could not process file {self.infile} -> {self.outfile}. Removing all newly'
-                                            f' generated files.')
-                postprocessing_logger.error(e)
-                postprocessing_logger.error(traceback.print_exc())
-                raise e
-            finally:
-                if kwargs.get('keep_intermediate_files', False):
-                    self._temp_files = []
-                else:
-                    self._remove_temp_files()
+        self.process_file()
 
     @staticmethod
     def process_record(record: OrderedDict, **kwargs) -> OrderedDict:
@@ -326,13 +130,13 @@ class Widebeam2NormalScan(BaseConvert):
         record: OrderedDict
             hdf5 record, downsampled to one beam
         """
-        beam_index = kwargs.get('beam_index', None)
-        beamkeys = list(beam_index.keys())
-
-        first_timestamp = int(record['sqn_timestamps'][0]*1000)
-        #find the closest timestamp in beam_index from first_timestamp and te index that corresponds to it
-        index = np.argmin(abs(first_timestamp - np.array([int(i) for i in beamkeys])))
-        beam2keep = beam_index[beamkeys[index]] #The beam to keep
+        beam2keep = 0
+        first_min = dt.datetime.fromtimestamp(record['sqn_timestamps'][0]).replace(second =0, microsecond = 0)
+        timestamp = dt.datetime.fromtimestamp(record['sqn_timestamps'][0])
+        diff = abs(first_min - timestamp).total_seconds()/record['int_time']
+        beam2keep = int(round(diff))
+        if beam2keep >= 16:
+            beam2keep = 0
 
         #Seperate the beam to keep
         record['beam_nums'] = np.array([np.uint32(beam2keep)])
@@ -351,7 +155,7 @@ class Widebeam2NormalScan(BaseConvert):
         return record
 
     @staticmethod
-    def beam_process_2_normal(all_records: list, record: dict, **kwargs) -> dict:
+    def dmap_to_dmap(file_to_process: str, processed_file: str, **kwargs) -> dict:
         """
         Checks what beam index is associated to timestamp and keeps only that beam from a set of 16 records.
 
@@ -368,6 +172,29 @@ class Widebeam2NormalScan(BaseConvert):
         beamedrec: list
             The downsampled record
         """
+
+        sdarn_read = pydarnio.SDarnRead(file_to_process)
+        data = sdarn_read.read_rawacf()
+
+        record = dict()
+        all_records = []  # record names
+
+        for rec in data:  # Find the record names
+            all_records.append(
+                str(rec['time.yr']) + str(rec['time.mo']) + str(rec['time.dy']) + str(rec['time.hr']) + str(
+                    rec['time.mt']) + str(rec['time.sc']) + str(rec['time.us']))
+
+        all_records = list(dict.fromkeys(all_records))
+
+        for i in all_records:  # reformat the records in 16 records per entry to better visualise FullFOV
+            beam_rec = []
+            for rec in data:
+                rec_time = str(rec['time.yr']) + str(rec['time.mo']) + str(rec['time.dy']) + str(
+                    rec['time.hr']) + str(rec['time.mt']) + str(rec['time.sc']) + str(rec['time.us'])
+                if rec_time == i:
+                    beam_rec.append(rec)
+            record[i] = beam_rec
+
         cnt = 0  # initialize beam counter
         beamedrec = []
         for i in all_records:
@@ -387,4 +214,4 @@ class Widebeam2NormalScan(BaseConvert):
                     newrec['scan'] = np.int16(0)
                 cnt += 1
             beamedrec.append(newrec) # add the beam to keep
-        return beamedrec
+        pydarnio.SDarnWrite(beamedrec, processed_file).write_rawacf(processed_file)
