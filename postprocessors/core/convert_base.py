@@ -61,18 +61,15 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         metadata = dict()  # This is purely to avoid a bunch of if statements later checking if "metadata" in kwargs
 
     with h5py.File(filename, 'r') as hdf5_file:
-        try:
-            record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
+        record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
+        record_list = []  # List of all 'extra' records to process
+        if "descriptions" in record_dict:
             record_dict['descriptions'].update(metadata.pop('descriptions'))
             record_dict['units'].update(metadata.pop('units'))
             record_dict['dim_labels'].update(metadata.pop('dim_labels'))
             record_dict['dim_scales'].update(metadata.pop('dim_scales'))
             record_dict['dim_nicknames'].update(metadata.pop('dim_nicknames'))
-            record_dict.update(metadata)
-            record_list = []  # List of all 'extra' records to process
-        except: #if this metadata does not exist it fails
-            record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
-            record_list = []  # List of all 'extra' records to process
+            record_dict.update(metadata)        
 
         # If processing multiple records at a time, get all the records ready
         if records_per_process > 1:
