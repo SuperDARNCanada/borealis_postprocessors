@@ -185,23 +185,13 @@ class Widebeam2NormalScan(BaseConvert):
                     concurrent_recs.append(rec)
             grouped_records.append(concurrent_recs)
 
-        cnt = 0  # initialize beam counter
-        beamedrec = []
-        for i in all_records:
-            if cnt < 16:
-                newrec = record[i][cnt]
-                if cnt == 0: #flag the scan marker if at the start of scan
-                    newrec['scan'] = np.int16(1)
-                else:
-                    newrec['scan'] = np.int16(0)
-                cnt += 1
-            else:
-                cnt = 0
-                newrec = record[i][cnt]
-                if cnt == 0: #flag the scan marker if at the start of scan
-                    newrec['scan'] = np.int16(1)
-                else:
-                    newrec['scan'] = np.int16(0)
-                cnt += 1
-            beamedrec.append(newrec) # add the beam to keep
-        pydarnio.SDarnWrite(beamedrec, processed_file).write_rawacf(processed_file)
+        beam_to_keep = 0
+        recs_kept = []
+        for concurrent_recs in grouped_records:
+            rec = concurrent_recs[beam_to_keep]
+            rec['scan'] = np.int16(beam_to_keep == 0)
+            beam_to_keep += 1
+            if beam_to_keep >= num_beams:
+                beam_to_keep = 0
+            recs_kept.append(rec)
+        pydarnio.SDarnWrite(recs_kept, processed_file).write_rawacf(processed_file)
