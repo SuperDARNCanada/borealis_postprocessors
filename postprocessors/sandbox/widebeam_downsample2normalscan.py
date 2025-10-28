@@ -154,8 +154,7 @@ class Widebeam2NormalScan(BaseConvert):
         sdarn_read = pydarnio.SDarnRead(file_to_process)
         data = sdarn_read.read_rawacf()
 
-        record = dict()
-        all_records = []  # record names
+        grouped_records = []
 
         def get_timestamp(rec: dict) -> dt.datetime:
             """Builds a datetime object from the metadata of the DMAP record"""
