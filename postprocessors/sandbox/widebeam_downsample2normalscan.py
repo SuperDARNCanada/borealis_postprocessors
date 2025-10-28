@@ -177,14 +177,13 @@ class Widebeam2NormalScan(BaseConvert):
         timestamps = sorted(list(timestamps))
         num_beams = len(recs) / len(timestamps)
 
-        for i in all_records:  # reformat the records in 16 records per entry to better visualise FullFOV
-            beam_rec = []
+        for tstamp in timestamps:  # group all records with identical timestamps
+            concurrent_recs = []
             for rec in data:
-                rec_time = str(rec['time.yr']) + str(rec['time.mo']) + str(rec['time.dy']) + str(
-                    rec['time.hr']) + str(rec['time.mt']) + str(rec['time.sc']) + str(rec['time.us'])
-                if rec_time == i:
-                    beam_rec.append(rec)
-            record[i] = beam_rec
+                rec_time = get_timestamp(rec)
+                if rec_time == tstamp:
+                    concurrent_recs.append(rec)
+            grouped_records.append(concurrent_recs)
 
         cnt = 0  # initialize beam counter
         beamedrec = []
