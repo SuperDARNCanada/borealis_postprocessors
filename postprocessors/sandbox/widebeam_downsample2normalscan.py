@@ -157,12 +157,25 @@ class Widebeam2NormalScan(BaseConvert):
         record = dict()
         all_records = []  # record names
 
-        for rec in data:  # Find the record names
-            all_records.append(
-                str(rec['time.yr']) + str(rec['time.mo']) + str(rec['time.dy']) + str(rec['time.hr']) + str(
-                    rec['time.mt']) + str(rec['time.sc']) + str(rec['time.us']))
+        def get_timestamp(rec: dict) -> dt.datetime:
+            """Builds a datetime object from the metadata of the DMAP record"""
+            timestamp = dt.datetime(
+                rec['time.yr'],
+                rec['time.mo'],
+                rec['time.dy'],
+                rec['time.hr'],
+                rec['time.mt'],
+                rec['time.sc'],
+                rec['time.us'],
+                tzinfo=dt.timezone.utc,
+            )
+            return timestamp
 
-        all_records = list(dict.fromkeys(all_records))
+        timestamps = set()
+        for rec in data:  # Find the record names
+            timestamps.add(get_timestamp(rec))
+        timestamps = sorted(list(timestamps))
+        num_beams = len(recs) / len(timestamps)
 
         for i in all_records:  # reformat the records in 16 records per entry to better visualise FullFOV
             beam_rec = []
