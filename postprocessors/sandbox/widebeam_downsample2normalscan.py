@@ -119,13 +119,13 @@ class Widebeam2NormalScan(BaseConvert):
         # Separate the beam to keep
         record['beam_nums'] = np.array([np.uint32(beam2keep)])
         record['beam_azms'] = np.array([record['beam_azms'][beam2keep]])
-        try:
+        if "data_dimensions" in record:
             record['data_dimensions'][0] = 1
-        except:
+        else:
             record['correlation_dimensions'][0] = 1
-        record['main_acfs'] = record['main_acfs'][beam2keep, :, :].reshape(1, record['data_dimensions'][1], record['data_dimensions'][2])
-        record['intf_acfs'] = record['intf_acfs'][beam2keep, :, :].reshape(1, record['data_dimensions'][1], record['data_dimensions'][2])
-        record['xcfs'] = record['xcfs'][beam2keep, :, :].reshape(1, record['data_dimensions'][1], record['data_dimensions'][2])
+        record['main_acfs'] = record['main_acfs'][beam2keep, :, :]
+        record['intf_acfs'] = record['intf_acfs'][beam2keep, :, :]
+        record['xcfs'] = record['xcfs'][beam2keep, :, :]
         if beam2keep == 0:
             record['scan_start_marker'] = True
         else:
