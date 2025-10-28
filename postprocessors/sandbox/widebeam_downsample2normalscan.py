@@ -89,28 +89,6 @@ class Widebeam2NormalScan(BaseConvert):
         self.outfile_structure = outfile_structure
 
 
-        def check_args(self):
-
-            if self.infile_structure not in rs.FILE_STRUCTURE_MAPPING[self.infile_type]:
-                raise conversion_exceptions.ImproperFileStructureError(
-                    f'Input file structure "{self.infile_structure}" is not compatible with input file type '
-                    f'"{self.infile_type}": Valid structures for {self.infile_type} are '
-                    f'{rs.FILE_STRUCTURE_MAPPING[self.infile_type]}'
-                )
-            if self.outfile_structure not in rs.FILE_STRUCTURE_MAPPING[self.outfile_type]:
-                raise conversion_exceptions.ImproperFileStructureError(
-                    f'Output file structure "{self.outfile_structure}" is not compatible with output file type '
-                    f'"{self.outfile_type}": Valid structures for {self.outfile_type} are '
-                    f'{rs.FILE_STRUCTURE_MAPPING[self.outfile_type]}'
-                )
-            if self.infile_structure not in ['array', 'site', 'dmap']: #added to accept dmap input
-                raise conversion_exceptions.ConversionUpstreamError(
-                    f'Input file structure "{self.infile_structure}" cannot be reprocessed into any other format.'
-                )
-        check_args(self)
-        self.averaging_method = None
-        self._temp_files = []
-        self.process_file()
 
     @staticmethod
     def process_record(record: OrderedDict, **kwargs) -> OrderedDict:
