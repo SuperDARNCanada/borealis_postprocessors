@@ -81,12 +81,6 @@ class Widebeam2NormalScan(BaseConvert):
         outfile_structure: str
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
         """
-        self.infile = infile
-        self.outfile = outfile
-        self.infile_type = infile_type
-        self.infile_structure = infile_structure
-        self.outfile_type = outfile_type
-        self.outfile_structure = outfile_structure
         super().__init__(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure)
         self.process_file()
 
@@ -94,15 +88,16 @@ class Widebeam2NormalScan(BaseConvert):
     @staticmethod
     def process_record(record: OrderedDict, **kwargs) -> OrderedDict:
         """
-        Takes a record from a rawacf file process into a rawacf record.
-        This method also keeps a single designated beam,
-
+        Takes a record from a rawacf file processes from widebeam to replicate normalscan rawacf with one beam "active'
+        per integration time
+        1. Grabs the closest minute to first timestamp
+        2. Finds how many seconds past the minute, in order to determine a beam number
+        3. Based on the beam to keep, save that portion of record
+        4. Return the updated record
         Parameters
         ----------
         record: OrderedDict
             hdf5 record containing rawacf data and metadata
-        beam_index: Dict
-            A dictionary mapping timestamp to beam index
 
         Returns
         -------
@@ -138,6 +133,7 @@ class Widebeam2NormalScan(BaseConvert):
     @staticmethod
     def dmap_to_dmap(file_to_process: str, processed_file: str, **kwargs) -> dict:
         """
+        Uses the timestamp to determine which beam to keep for a given timestamp, to replicate normal scan
         1. For dmap input collects a list of timestamps
         2. Collects records that have the same timestamps into a new group
         3. For each timestamp, determine which beam should be saved
@@ -145,18 +141,12 @@ class Widebeam2NormalScan(BaseConvert):
         5. Update the scan marker
         6. Save as dmap RAWACF
 
-
         Parameters
         ----------
         file_to_process: str
             File that should be processed.
         processed_file: str
             Output file name
-
-        Returns
-        -------
-        beamedrec: list
-            The downsampled record
         """
 
         sdarn_read = pydarnio.SDarnRead(file_to_process)
