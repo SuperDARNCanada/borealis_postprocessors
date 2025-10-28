@@ -116,7 +116,7 @@ class Widebeam2NormalScan(BaseConvert):
         if beam2keep >= 16:
             beam2keep = 0
 
-        #Seperate the beam to keep
+        # Separate the beam to keep
         record['beam_nums'] = np.array([np.uint32(beam2keep)])
         record['beam_azms'] = np.array([record['beam_azms'][beam2keep]])
         try:
