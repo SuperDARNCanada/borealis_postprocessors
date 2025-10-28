@@ -87,7 +87,8 @@ class Widebeam2NormalScan(BaseConvert):
         self.infile_structure = infile_structure
         self.outfile_type = outfile_type
         self.outfile_structure = outfile_structure
-
+        super().__init__(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure)
+        self.process_file()
 
 
     @staticmethod
@@ -121,11 +122,13 @@ class Widebeam2NormalScan(BaseConvert):
         record['beam_azms'] = np.array([record['beam_azms'][beam2keep]])
         if "data_dimensions" in record:
             record['data_dimensions'][0] = 1
+            dims = record['data_dimensions']
         else:
             record['correlation_dimensions'][0] = 1
-        record['main_acfs'] = record['main_acfs'][beam2keep, :, :]
-        record['intf_acfs'] = record['intf_acfs'][beam2keep, :, :]
-        record['xcfs'] = record['xcfs'][beam2keep, :, :]
+            dims = record['correlation_dimensions']
+        record['main_acfs'] = record['main_acfs'][beam2keep, :, :].reshape(dims)
+        record['intf_acfs'] = record['intf_acfs'][beam2keep, :, :].reshape(dims)
+        record['xcfs'] = record['xcfs'][beam2keep, :, :].reshape(dims)
         if beam2keep == 0:
             record['scan_start_marker'] = True
         else:
@@ -135,15 +138,20 @@ class Widebeam2NormalScan(BaseConvert):
     @staticmethod
     def dmap_to_dmap(file_to_process: str, processed_file: str, **kwargs) -> dict:
         """
-        Checks what beam index is associated to timestamp and keeps only that beam from a set of 16 records.
+        1. For dmap input collects a list of timestamps
+        2. Collects records that have the same timestamps into a new group
+        3. For each timestamp, determine which beam should be saved
+        4. Save the associated beam and remove the others
+        5. Update the scan marker
+        6. Save as dmap RAWACF
+
 
         Parameters
         ----------
-        all_records: list
-            list of timestamps
-        record: dict
-            dictionary containing rawacf data, where the key is timestamp and each entry is a list of 16 beams
-            corresponding to one integration time/full FOV
+        file_to_process: str
+            File that should be processed.
+        processed_file: str
+            Output file name
 
         Returns
         -------
@@ -174,7 +182,7 @@ class Widebeam2NormalScan(BaseConvert):
         for rec in data:  # Find the record names
             timestamps.add(get_timestamp(rec))
         timestamps = sorted(list(timestamps))
-        num_beams = len(recs) / len(timestamps)
+        num_beams = len(data) / len(timestamps)
 
         for tstamp in timestamps:  # group all records with identical timestamps
             concurrent_recs = []

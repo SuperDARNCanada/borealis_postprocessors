@@ -182,7 +182,7 @@ class BaseConvert(object):
                 f'"{self.outfile_type}": Valid structures for {self.outfile_type} are '
                 f'{rs.FILE_STRUCTURE_MAPPING[self.outfile_type]}'
             )
-        if self.infile_structure not in ['array', 'site']:
+        if self.infile_structure not in ['array', 'site', 'dmap']:
             raise conversion_exceptions.ConversionUpstreamError(
                 f'Input file structure "{self.infile_structure}" cannot be reprocessed into any other format.'
             )
