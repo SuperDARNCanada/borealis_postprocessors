@@ -59,7 +59,7 @@ class Widebeam2NormalScan(BaseConvert):
         The desired structure of the output file. Same structures as above, plus 'dmap'.
     """
 
-    def __init__(self, infile: str, outfile: str, infile_type: str, outfile_type: str, infile_structure: str, outfile_structure: str):
+    def __init__(self, infile: str, outfile: str, infile_structure: str, outfile_structure: str):
         """
         Initialize the attributes of the class.
 
@@ -81,7 +81,7 @@ class Widebeam2NormalScan(BaseConvert):
         outfile_structure: str
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
         """
-        super().__init__(infile, outfile, infile_type, outfile_type, infile_structure, outfile_structure)
+        super().__init__(infile, outfile, "rawacf", "rawacf", infile_structure, outfile_structure)
         self.process_file()
 
 
