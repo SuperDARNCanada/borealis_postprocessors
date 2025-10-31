@@ -84,6 +84,9 @@ class Widebeam2NormalScan(BaseConvert):
         super().__init__(infile, outfile, "rawacf", "rawacf", infile_structure, outfile_structure)
         self.process_file()
 
+    def process_file(self, **kwargs):
+        super().process_file(avg_num = 16)
+
 
     @staticmethod
     def process_record(record: OrderedDict, **kwargs) -> OrderedDict:
@@ -97,38 +100,34 @@ class Widebeam2NormalScan(BaseConvert):
         Parameters
         ----------
         record: OrderedDict
-            hdf5 record containing rawacf data and metadata
-
+            hdf5 record containing rawacf data and metadata for beam 0
+        extra_records: list
+            list of the next 15 records after record
         Returns
         -------
-        record: OrderedDict
-            hdf5 record, downsampled to one beam
+        record: list of OrderedDict
+            list of 16 records, each downsampled to one beam
         """
-        beam2keep = 0
-        first_min = dt.datetime.fromtimestamp(record['sqn_timestamps'][0]).replace(second =0, microsecond = 0)
-        timestamp = dt.datetime.fromtimestamp(record['sqn_timestamps'][0])
-        diff = abs(first_min - timestamp).total_seconds()/record['int_time']
-        beam2keep = int(round(diff))
-        if beam2keep >= 16:
-            beam2keep = 0
-
+        extra_records = kwargs.get('extra_records', [])
+        new_record_set = [record] + extra_records
         # Separate the beam to keep
-        record['beam_nums'] = np.array([np.uint32(beam2keep)])
-        record['beam_azms'] = np.array([record['beam_azms'][beam2keep]])
-        if "data_dimensions" in record:
-            record['data_dimensions'][0] = 1
-            dims = record['data_dimensions']
-        else:
-            record['correlation_dimensions'][0] = 1
-            dims = record['correlation_dimensions']
-        record['main_acfs'] = record['main_acfs'][beam2keep, :, :].reshape(dims)
-        record['intf_acfs'] = record['intf_acfs'][beam2keep, :, :].reshape(dims)
-        record['xcfs'] = record['xcfs'][beam2keep, :, :].reshape(dims)
-        if beam2keep == 0:
-            record['scan_start_marker'] = True
-        else:
-            record['scan_start_marker'] = False
-        return record
+        for i, rec in enumerate(new_record_set):
+            rec['beam_nums'] = np.array([np.uint32(i)])
+            rec['beam_azms'] = np.array([rec['beam_azms'][i]])
+            if "data_dimensions" in rec:
+                rec['data_dimensions'][0] = 1
+                dims = rec['data_dimensions']
+            else:
+                rec['correlation_dimensions'][0] = 1
+                dims = rec['correlation_dimensions']
+            rec['main_acfs'] = rec['main_acfs'][i, :, :].reshape(dims)
+            rec['intf_acfs'] = rec['intf_acfs'][i, :, :].reshape(dims)
+            rec['xcfs'] = rec['xcfs'][i, :, :].reshape(dims)
+            if i == 0:
+                rec['scan_start_marker'] = True
+            else:
+                rec['scan_start_marker'] = False
+        return new_record_set
 
     @staticmethod
     def dmap_to_dmap(file_to_process: str, processed_file: str, **kwargs) -> dict:

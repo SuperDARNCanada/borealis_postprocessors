@@ -87,7 +87,12 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         return None, idx
     else:
         # Convert to numpy arrays for saving to file
-        formatted_record = rs.convert_to_numpy(processed_record, version=version)
+        if type(processed_record) == list: #if processed_record is a list of many records
+            formatted_record = []
+            for rec in processed_record:
+                formatted_record.append(rs.convert_to_numpy(rec, version=version))
+        else:
+            formatted_record = rs.convert_to_numpy(processed_record, version=version)
         return formatted_record, idx
 
 
@@ -276,7 +281,11 @@ class BaseConvert(object):
                 def append_to_file(rec, idx):
                     """Convenience function to append to file"""
                     if rec is not None:
-                        rs.write_records(outfile, {all_records[idx]: rec}, version=version)
+                        if type(rec) is list: #If rec is a list of records
+                            for i in range(0, len(rec)):
+                                rs.write_records(outfile, {all_records[idx + i]: rec[i]}, version=version)
+                        else:
+                            rs.write_records(outfile, {all_records[idx]: rec}, version=version)
 
                 def progress_bar(done_so_far, total):
                     """Convenience function to print a progress bar"""
