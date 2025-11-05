@@ -87,7 +87,7 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         return None, idx
     else:
         # Convert to numpy arrays for saving to file
-        if type(processed_record) == list: #if processed_record is a list of many records
+        if isinstance(processed_record, list):  # if processed_record is a list of many records
             formatted_record = []
             for rec in processed_record:
                 formatted_record.append(rs.convert_to_numpy(rec, version=version))
