@@ -123,10 +123,7 @@ class Widebeam2NormalScan(BaseConvert):
             rec['main_acfs'] = rec['main_acfs'][i, :, :].reshape(dims)
             rec['intf_acfs'] = rec['intf_acfs'][i, :, :].reshape(dims)
             rec['xcfs'] = rec['xcfs'][i, :, :].reshape(dims)
-            if i == 0:
-                rec['scan_start_marker'] = True
-            else:
-                rec['scan_start_marker'] = False
+            rec['scan_start_marker'] = (i == 0)
         return new_record_set
 
     @staticmethod
