@@ -281,9 +281,8 @@ class BaseConvert(object):
                 def append_to_file(rec, idx):
                     """Convenience function to append to file"""
                     if rec is not None:
-                        if type(rec) is list: #If rec is a list of records
-                            for i in range(0, len(rec)):
-                                rs.write_records(outfile, {all_records[idx + i]: rec[i]}, version=version)
+                        if isinstance(rec, list):  # If rec is a list of records
+                            rs.write_records(outfile, {all_records[idx + i]: r for i, r in enumerate(rec)}, version=version)
                         else:
                             rs.write_records(outfile, {all_records[idx]: rec}, version=version)
 
