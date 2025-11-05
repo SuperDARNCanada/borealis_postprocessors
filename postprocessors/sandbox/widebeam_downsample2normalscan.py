@@ -105,7 +105,7 @@ class Widebeam2NormalScan(BaseConvert):
             list of the next 15 records after record
         Returns
         -------
-        record: list of OrderedDict
+        record: list[OrderedDict]
             list of 16 records, each downsampled to one beam
         """
         extra_records = kwargs.get('extra_records', [])
