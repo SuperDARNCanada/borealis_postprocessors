@@ -82,11 +82,9 @@ class Widebeam2NormalScan(BaseConvert):
             Borealis structure of output file. Either 'array', 'site', or 'dmap'.
         """
         super().__init__(infile, outfile, "rawacf", "rawacf", infile_structure, outfile_structure)
-        self.process_file()
 
     def process_file(self, **kwargs):
-        super().process_file(avg_num = 16)
-
+        super().process_file(avg_num = 16, **kwargs)
 
     @staticmethod
     def process_record(record: OrderedDict, **kwargs) -> OrderedDict:
@@ -145,8 +143,7 @@ class Widebeam2NormalScan(BaseConvert):
             Output file name
         """
 
-        sdarn_read = pydarnio.SDarnRead(file_to_process)
-        data = sdarn_read.read_rawacf()
+        data = pydarnio.read_rawacf(file_to_process, mode="strict")
 
         grouped_records = []
 
@@ -164,18 +161,20 @@ class Widebeam2NormalScan(BaseConvert):
             )
             return timestamp
 
+        rec_timestamps = list()
         timestamps = set()
         for rec in data:  # Find the record names
-            timestamps.add(get_timestamp(rec))
+            tstamp = get_timestamp(rec)
+            rec_timestamps.append(tstamp)
+            timestamps.add(tstamp)
         timestamps = sorted(list(timestamps))
         num_beams = len(data) / len(timestamps)
 
         for tstamp in timestamps:  # group all records with identical timestamps
             concurrent_recs = []
-            for rec in data:
-                rec_time = get_timestamp(rec)
-                if rec_time == tstamp:
-                    concurrent_recs.append(rec)
+            for i, rec_tstamp in enumerate(rec_timestamps):
+                if rec_tstamp == tstamp:
+                    concurrent_recs.append(data[i])
             grouped_records.append(concurrent_recs)
 
         beam_to_keep = 0
@@ -187,4 +186,5 @@ class Widebeam2NormalScan(BaseConvert):
             if beam_to_keep >= num_beams:
                 beam_to_keep = 0
             recs_kept.append(rec)
-        pydarnio.SDarnWrite(recs_kept, processed_file).write_rawacf(processed_file)
+        
+        pydarnio.write_rawacf(recs_kept, processed_file)
