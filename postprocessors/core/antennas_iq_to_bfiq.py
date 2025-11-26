@@ -80,11 +80,11 @@ class AntennasIQ2Bfiq(BaseConvert):
             githash = githash.decode('utf-8')
         borealis_major_version = int(githash.split('-')[0].lstrip('v').split('.')[0])
         if borealis_major_version < 1:
-            record['first_range'] = cls.calculate_first_range(record)
+            record['first_range'] = cls.calculate_first_range(record, **kwargs)
             record['first_range_rtt'] = cls.calculate_first_range_rtt(record)
             record['lags'] = cls.create_lag_table(record)
             record['range_sep'] = cls.calculate_range_separation(record)
-            record['num_ranges'] = cls.get_number_of_ranges(record)
+            record['num_ranges'] = cls.get_number_of_ranges(record, **kwargs)
             record['data'] = cls.beamform_data(record)
             record['data_descriptors'] = cls.get_data_descriptors()
             record['data_dimensions'] = cls.get_data_dimensions(record)
@@ -185,7 +185,7 @@ class AntennasIQ2Bfiq(BaseConvert):
 
         main_data = np.array(main_beamformed_data)
         intf_data = np.array(intf_beamformed_data)
-        all_data = np.stack((main_data, intf_data), axis=0)
+        all_data = np.stack((main_data, intf_data), axis=0, dtype=np.complex64)
 
         return all_data
 
@@ -291,12 +291,12 @@ class AntennasIQ2Bfiq(BaseConvert):
         samples: np.array
             Basic_samples that have been shaped for the antenna for the desired beam.
         """
-        samples = amplitude * np.exp(1j * phshift) * basic_samples
+        samples = amplitude * np.exp(1j * phshift, dtype=np.complex64) * basic_samples
 
         return samples
 
     @classmethod
-    def calculate_first_range(cls, record: OrderedDict) -> float:
+    def calculate_first_range(cls, record: OrderedDict, **kwargs) -> float:
         """
         Calculates the distance from the main array to the first range (in km).
 
@@ -310,9 +310,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         first_range: float
             Distance to first range in km
         """
-        # TODO: Get this from somewhere, probably linked to the experiment ran. Might need to look up
-        #   based on githash
-        return record.get("first_range", np.float32(180.0))
+        return kwargs.get("first_range", record.get("first_range", np.float32(180.0)))
 
     @classmethod
     def calculate_first_range_rtt(cls, record: OrderedDict) -> float:
@@ -387,7 +385,7 @@ class AntennasIQ2Bfiq(BaseConvert):
         )
 
     @classmethod
-    def get_number_of_ranges(cls, record: OrderedDict) -> int:
+    def get_number_of_ranges(cls, record: OrderedDict, **kwargs) -> int:
         """
         Gets the number of ranges for the record.
 
@@ -401,8 +399,9 @@ class AntennasIQ2Bfiq(BaseConvert):
         num_ranges: int
             The number of ranges of the data
         """
-        if "num_ranges" in record.keys():
-            return record["num_ranges"]
+        num_ranges = kwargs.get("num_ranges", record.get("num_ranges", None))
+        if num_ranges is not None:
+            return num_ranges
 
         # Infer the number of ranges from the record metadata
         first_range_offset = cls.calculate_first_range_rtt(record) * 1e-6 * record['rx_sample_rate']
