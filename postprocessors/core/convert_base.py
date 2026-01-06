@@ -27,7 +27,7 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, processing_fn,
+def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, records_previous: int, processing_fn,
                        file_type: str, version: tuple, **kwargs):
     """
     Helper function for processing a single record. It is defined here to facilitate multiprocessing.
@@ -63,14 +63,14 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
     with h5py.File(filename, 'r') as hdf5_file:
         record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
         record_list = []  # List of all 'extra' records to process
+        prev_record = []
         if "descriptions" in record_dict:
             record_dict['descriptions'].update(metadata.pop('descriptions'))
             record_dict['units'].update(metadata.pop('units'))
             record_dict['dim_labels'].update(metadata.pop('dim_labels'))
             record_dict['dim_scales'].update(metadata.pop('dim_scales'))
             record_dict['dim_nicknames'].update(metadata.pop('dim_nicknames'))
-            record_dict.update(metadata)        
-
+            record_dict.update(metadata)
         # If processing multiple records at a time, get all the records ready
         if records_per_process > 1:
             for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
@@ -80,8 +80,18 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
                     extra_rec = rs.read_group(hdf5_file[record_keys[num]], file_type)
                     extra_rec.update(metadata)
                     record_list.append(extra_rec)
+        if records_previous > 0:
+            if idx !=0:
+                for num in range(idx - records_previous, idx):
+                    if(num >= 0):
+                        if version[0] > 0:
+                            prev_record.append(hdf5_file[record_keys[num]])
+                        else:
+                            prev_rec= rs.read_group(hdf5_file[record_keys[num]], file_type)
+                            prev_rec.update(metadata)
+                            prev_record.append(prev_rec)
 
-    processed_record = processing_fn(record_dict, extra_records=record_list, **kwargs)
+    processed_record = processing_fn(record_dict, extra_records=record_list, previous_records= prev_record, **kwargs)
 
     if processed_record is None:
         return None, idx
@@ -265,6 +275,7 @@ class BaseConvert(object):
                     all_records.remove("metadata")
 
             records_per_process = kwargs.get('avg_num', 1)      # Records getting averaged together.
+            records_previous = kwargs.get('prev_rec', 1)      # Records getting averaged together.
             if not kwargs.get('force', False):      # file may be partially processed, only process remaining records
                 final_records_remaining = sorted(list(
                     set(all_records[::records_per_process]).difference(finished_records)))
@@ -306,7 +317,7 @@ class BaseConvert(object):
 
                 function_to_call = partial(processing_machine,
                                            filename=file_to_process, record_keys=all_records,
-                                           records_per_process=records_per_process,
+                                           records_per_process=records_per_process, records_previous=records_previous,
                                            processing_fn=self.process_record, file_type=self.infile_type,
                                            version=version, **kwargs)
 
