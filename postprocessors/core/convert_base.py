@@ -275,7 +275,7 @@ class BaseConvert(object):
                     all_records.remove("metadata")
 
             records_per_process = kwargs.get('avg_num', 1)      # Records getting averaged together.
-            records_previous = kwargs.get('prev_rec', 1)      # Records getting averaged together.
+            records_previous = kwargs.get('prev_rec', 0)      # Records getting averaged together.
             if not kwargs.get('force', False):      # file may be partially processed, only process remaining records
                 final_records_remaining = sorted(list(
                     set(all_records[::records_per_process]).difference(finished_records)))
