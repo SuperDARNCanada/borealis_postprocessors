@@ -106,6 +106,92 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         return formatted_record, idx
 
 
+def processing_machine_grouped(idx_group: tuple, filename: str, record_keys: list, records_per_process: int, records_previous: int, processing_fn,
+                       file_type: str, version: tuple, **kwargs):
+    """
+    Helper function for processing a single record. It is defined here to facilitate multiprocessing.
+
+    Parameters
+    ----------
+    idx: int
+        Index into record_keys which tells processing_machine() which record to process
+    filename: str
+        HDF5 file with records to process.
+    record_keys: list
+        List of all top-level keys of the HDF5 file.
+    records_per_process: int
+        Number of records to process per call to this function.
+    processing_fn: callable
+        Function to call to process a record.
+    file_type: str
+        File type that is being processed. One of 'antennas_iq', 'bfiq', or 'rawacf'.
+    version: tuple
+        Version numbers of the record. (major, minor[, patch])
+    kwargs: dict
+        Key-word arguments to pass to processing_fn
+
+    Returns
+    -------
+    formatted_record, idx: properly-formatted processed record and the index which was processed.
+    """
+    idx = idx_group[0]
+    if "metadata" in kwargs:
+        metadata = rs.read_group(kwargs["metadata"], file_type)
+    else:
+        metadata = dict()  # This is purely to avoid a bunch of if statements later checking if "metadata" in kwargs
+
+    with h5py.File(filename, 'r') as hdf5_file:
+        record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
+        record_list = []  # List of all 'extra' records to process
+        prev_record = []
+        if "descriptions" in record_dict:
+            record_dict['descriptions'].update(metadata.pop('descriptions'))
+            record_dict['units'].update(metadata.pop('units'))
+            record_dict['dim_labels'].update(metadata.pop('dim_labels'))
+            record_dict['dim_scales'].update(metadata.pop('dim_scales'))
+            record_dict['dim_nicknames'].update(metadata.pop('dim_nicknames'))
+            record_dict.update(metadata)
+        # If processing multiple records at a time, get all the records ready
+        for num in range(idx + 1, idx_group[1]+1):
+            if version[0] > 0:
+                record_list.append(hdf5_file[record_keys[num]])
+            else:
+                extra_rec = rs.read_group(hdf5_file[record_keys[num]], file_type)
+                extra_rec.update(metadata)
+                record_list.append(extra_rec)
+        if records_per_process > 1:
+            for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
+                if version[0] > 0:
+                    record_list.append(hdf5_file[record_keys[num]])
+                else:
+                    extra_rec = rs.read_group(hdf5_file[record_keys[num]], file_type)
+                    extra_rec.update(metadata)
+                    record_list.append(extra_rec)
+        if records_previous > 0:
+            if idx !=0:
+                for num in range(idx - records_previous, idx):
+                    if(num >= 0):
+                        if version[0] > 0:
+                            prev_record.append(hdf5_file[record_keys[num]])
+                        else:
+                            prev_rec= rs.read_group(hdf5_file[record_keys[num]], file_type)
+                            prev_rec.update(metadata)
+                            prev_record.append(prev_rec)
+
+    processed_record = processing_fn(record_dict, extra_records=record_list, previous_records= prev_record, **kwargs)
+
+    if processed_record is None:
+        return None, idx
+    else:
+        # Convert to numpy arrays for saving to file
+        if isinstance(processed_record, list):  # if processed_record is a list of many records
+            formatted_record = []
+            for rec in processed_record:
+                formatted_record.append(rs.convert_to_numpy(rec, version=version))
+        else:
+            formatted_record = rs.convert_to_numpy(processed_record, version=version)
+        return formatted_record, idx
+
 class BaseConvert(object):
     """
     Class for converting Borealis filetypes of all structures. This class abstracts and redirects
@@ -276,6 +362,7 @@ class BaseConvert(object):
 
             records_per_process = kwargs.get('avg_num', 1)      # Records getting averaged together.
             records_previous = kwargs.get('prev_rec', 0)      # Records getting averaged together.
+            record_list = kwargs.get('record_list', [])
             if not kwargs.get('force', False):      # file may be partially processed, only process remaining records
                 final_records_remaining = sorted(list(
                     set(all_records[::records_per_process]).difference(finished_records)))
@@ -283,7 +370,10 @@ class BaseConvert(object):
                 final_records_remaining = all_records[::records_per_process]
 
             first_idx = all_records.index(final_records_remaining[0])   # first record to process
-            num_to_process = round(len(all_records) / records_per_process)
+            if len(record_list) == 0:
+                num_to_process = round(len(all_records) / records_per_process)
+            else:
+                num_to_process = int(len(record_list) / records_per_process)
             num_completed = first_idx
             indices = range(first_idx, len(all_records), records_per_process)
 
@@ -314,27 +404,49 @@ class BaseConvert(object):
                     self._update_metadata(first_rec, outfile["metadata"], **kwargs)
                     kwargs['metadata'] = outfile['metadata']
                     del first_rec  # only need it for getting all the correct metadata
+                if len(record_list) == 0:
+                    function_to_call = partial(processing_machine,
+                                               filename=file_to_process, record_keys=all_records,
+                                               records_per_process=records_per_process, records_previous=records_previous,
+                                               processing_fn=self.process_record, file_type=self.infile_type,
+                                               version=version, **kwargs)
 
-                function_to_call = partial(processing_machine,
-                                           filename=file_to_process, record_keys=all_records,
-                                           records_per_process=records_per_process, records_previous=records_previous,
-                                           processing_fn=self.process_record, file_type=self.infile_type,
-                                           version=version, **kwargs)
-
-                num_processes = kwargs.get("num_processes", 1)
-                if num_processes > 1:   # Use multiprocessing if specified
-                    with get_context("spawn").Pool(num_processes) as p:
-                        for completed_record, i in p.imap(function_to_call, indices):
+                    num_processes = kwargs.get("num_processes", 1)
+                    if num_processes > 1:   # Use multiprocessing if specified
+                        with get_context("spawn").Pool(num_processes) as p:
+                            for completed_record, i in p.imap(function_to_call, indices):
+                                append_to_file(completed_record, i)
+                                num_completed += 1
+                                progress_bar(num_completed, num_to_process)
+                    else:   # Default single-worker
+                        for idx in indices:
+                            completed_record, i = function_to_call(idx)
                             append_to_file(completed_record, i)
                             num_completed += 1
                             progress_bar(num_completed, num_to_process)
-                else:   # Default single-worker
-                    for idx in indices:
-                        completed_record, i = function_to_call(idx)
-                        append_to_file(completed_record, i)
-                        num_completed += 1
-                        progress_bar(num_completed, num_to_process)
-                print('\r', flush=True, end='')     # Remove the progress bar
+                    print('\r', flush=True, end='')     # Remove the progress bar
+                else:
+                    function_to_call = partial(processing_machine_grouped,
+                                               filename=file_to_process, record_keys=all_records,
+                                               records_per_process=records_per_process,
+                                               records_previous=records_previous,
+                                               processing_fn=self.process_record, file_type=self.infile_type,
+                                               version=version, **kwargs)
+
+                    num_processes = kwargs.get("num_processes", 1)
+                    if num_processes > 1:  # Use multiprocessing if specified
+                        with get_context("spawn").Pool(num_processes) as p:
+                            for completed_record, i in p.imap(function_to_call, indices):
+                                append_to_file(completed_record, i)
+                                num_completed += 1
+                                progress_bar(num_completed, num_to_process)
+                    else:  # Default single-worker
+                        for idx in record_list:
+                            completed_record, i = function_to_call(idx)
+                            append_to_file(completed_record, i)
+                            num_completed += 1
+                            progress_bar(num_completed, num_to_process)
+                    print('\r', flush=True, end='')  # Remove the progress bar
 
             # Restructure to final structure format, if necessary
             if self.outfile_structure != 'site':

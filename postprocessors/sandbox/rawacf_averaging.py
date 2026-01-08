@@ -73,8 +73,6 @@ class Rawacf_Avg(BaseConvert):
             Path to output file.
         infile_type: str
             Type of data file. Types include:
-            'antennas_iq'
-            'bfiq'
             'rawacf'
         outfile_type: str
             Desired type of output data file. Same types as above.
@@ -86,30 +84,39 @@ class Rawacf_Avg(BaseConvert):
         super().__init__(infile, outfile, "rawacf", "rawacf", infile_structure, outfile_structure)
 
     def process_file(self, avg_dur: float = 3.7, **kwargs):
-        int_time = kwargs.get('int_time', 3.7)
-        num_recs = int(np.ceil(avg_dur / int_time))
         collected_timestamps = []
+        all_records = []
+        collected_indices = []
+
         with h5py.File(self.infile, 'r') as infile:
-            all_records = sorted(list(infile.keys()))
-            for rec in all_records:
-                collected_timestamps += infile[rec]['sqn_timestamps']
+            all_records += sorted(list(infile.keys()))
+            for i, rec in enumerate(all_records):
+                collected_timestamps += list(infile[rec]['sqn_timestamps'])
+                collected_indices += [i]*len(infile[rec]['sqn_timestamps'])
         collected_timestamps =list(map(float, collected_timestamps))
+
         end_points = []
+        record_list = []
         start = 0
-        end = 0
+        int_time = []
         while start < len(collected_timestamps):
             first = collected_timestamps[start]
+            first_index = collected_indices[start]
             time_end = first + avg_dur
             diff = np.abs(time_end - np.array(collected_timestamps))
             end = np.argmin(diff)
             if end >= len(collected_timestamps):
                 last = collected_timestamps[len(collected_timestamps)-1]
+                last_index = collected_indices[len(collected_indices)-1]
             else:
                 last = collected_timestamps[end]
+                last_index = collected_indices[end]
             num_seq = len(collected_timestamps[start:(end+1)])
+            record_list.append((first_index, last_index))
             start = end + 1
             end_points.append([first, last, num_seq])
-        super().process_file(avg_num=num_recs, prev_rec = int(np.ceil(len(all_records)/2)), end_points = end_points, **kwargs)
+            int_time.append(last-first)
+        super().process_file(record_list = record_list, end_points = end_points, **kwargs)
 
     @staticmethod
     def process_record(record: OrderedDict, averaging_method: Union[None, str] = 'mean', **kwargs) -> OrderedDict:
@@ -150,26 +157,15 @@ class Rawacf_Avg(BaseConvert):
         end_points = kwargs['end_points'][index]
         flag0 = False
         flag1 = False
-        # for i, rec in enumerate(total_records):
-        #     temp_trunc_ind0 = np.where(rec['sqn_timestamps'] == end_points[0])
-        #     temp_trunc_ind1 = np.where(rec['sqn_timestamps'] == end_points[1])
-        #     if temp_trunc_ind0[0].size != 0:
-        #         trunc_ind0 = i
-        #         flag0 = True
-        #     if temp_trunc_ind1[0].size != 0:
-        #         trunc_ind1 = i
-        #         flag1 = True
-        #     if flag0 and flag1:
-        #         break
 
-        for i, rec in enumerate(total_records[::-1]):
+        for i, rec in enumerate(total_records):
             temp_trunc_ind0 = np.where(rec['sqn_timestamps'] == end_points[0])
             temp_trunc_ind1 = np.where(rec['sqn_timestamps'] == end_points[1])
             if temp_trunc_ind0[0].size != 0:
-                trunc_ind0 = (len(total_records)-1) - i
+                trunc_ind0 = i
                 flag0 = True
             if temp_trunc_ind1[0].size != 0:
-                trunc_ind1 = (len(total_records)-1) - i
+                trunc_ind1 = i
                 flag1 = True
             if flag0 and flag1:
                 break
