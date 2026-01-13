@@ -105,9 +105,8 @@ class Rawacf_Avg(BaseConvert):
             time_end = first + avg_dur
             diff = np.abs(time_end - np.array(collected_timestamps))
             end = np.argmin(diff)
-            if end >= len(collected_timestamps):
-                last = collected_timestamps[len(collected_timestamps)-1]
-                last_index = collected_indices[len(collected_indices)-1]
+            if (end+1) >= len(collected_timestamps):
+                break
             else:
                 last = collected_timestamps[end]
                 last_index = collected_indices[end]
@@ -186,21 +185,30 @@ class Rawacf_Avg(BaseConvert):
             old_intf_acfs = rec['intf_acfs']*num_sequences
             old_xcfs = rec['xcfs']*num_sequences
 
-            rng= np.random.default_rng()
-            filter = np.histogram(sorted(rng.normal(0, 1, 100)), bins = num_sequences, density=False)[0]
-            filter = filter/np.max(filter)
+            rng= np.random.default_rng(47)
+            filter = np.abs(rng.normal(0, 0.1, size=num_sequences))
+            filter = filter/sum(filter)
             un_avg_main_acf = np.array([old_main_acfs*weight for weight in filter])
             un_avg_intf_acf = np.array([old_intf_acfs*weight for weight in filter])
             un_avg_xcf = np.array([old_xcfs*weight for weight in filter])
+
+
             a = np.array(list(map(float, rec['sqn_timestamps'])))
             loc = np.where( (float(end_points[0])<=a) & (a<=float(end_points[1])) )[0]
             sqn_timestamps.extend(list(rec['sqn_timestamps'][loc]))
             noise_at_freq.extend(rec['noise_at_freq'][loc])
-            int_time += a[loc][-1] - a[loc][0]
+            if (np.max(loc) +1) < len(a):
+                int_time += a[np.max(loc) + 1] - a[loc][0]
+            else:
+                int_time += a[loc][-1] - a[loc][0]
 
-            avg_main_acf = np.einsum('ijkl->jkl', un_avg_main_acf[loc])
-            avg_intf_acf = np.einsum('ijkl->jkl', un_avg_intf_acf[loc])
-            avg_xcf = np.einsum('ijkl->jkl', un_avg_xcf[loc])
+            un_avg_main_acf = un_avg_main_acf[loc]
+            un_avg_intf_acf = un_avg_intf_acf[loc]
+            un_avg_xcf = un_avg_xcf[loc]
+
+            avg_main_acf = np.einsum('ijkl->jkl', un_avg_main_acf)
+            avg_intf_acf = np.einsum('ijkl->jkl', un_avg_intf_acf)
+            avg_xcf = np.einsum('ijkl->jkl', un_avg_xcf)
 
             main_acfs += avg_main_acf
             intf_acfs += avg_intf_acf
@@ -213,7 +221,7 @@ class Rawacf_Avg(BaseConvert):
         record['main_acfs'] = np.array(main_acfs, dtype=np.complex64)
         record['intf_acfs'] = np.array(intf_acfs, dtype=np.complex64)
         record['xcfs'] = np.array(xcfs, dtype=np.complex64)
-        record['int_time'] = int_time
+        record['int_time'] = np.float32(int_time)
         record['num_sequences'] = total_seq
         record['sqn_timestamps'] = sqn_timestamps
         record['noise_at_freq'] = noise_at_freq
