@@ -42,6 +42,8 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         List of all top-level keys of the HDF5 file.
     records_per_process: int
         Number of records to process per call to this function.
+    records_previous: int
+        Number of previous records to process per call to this function.
     processing_fn: callable
         Function to call to process a record.
     file_type: str
@@ -113,14 +115,16 @@ def processing_machine_grouped(idx_group: tuple, filename: str, record_keys: lis
 
     Parameters
     ----------
-    idx: int
-        Index into record_keys which tells processing_machine() which record to process
+    idx_group: tuple
+        Start and End Index in record_keys which tells processing_machine() which records to process
     filename: str
         HDF5 file with records to process.
     record_keys: list
         List of all top-level keys of the HDF5 file.
     records_per_process: int
         Number of records to process per call to this function.
+    records_previous: int
+        Number of previous records to process per call to this function.
     processing_fn: callable
         Function to call to process a record.
     file_type: str
@@ -159,15 +163,15 @@ def processing_machine_grouped(idx_group: tuple, filename: str, record_keys: lis
                 extra_rec = rs.read_group(hdf5_file[record_keys[num]], file_type)
                 extra_rec.update(metadata)
                 record_list.append(extra_rec)
-        if records_per_process > 1:
-            for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
+        if records_per_process > 1: #For extra records after the given set from idx_group tuple
+            for num in range(idx_group[1]+1, min(idx_group[1] + records_per_process, len(record_keys))):
                 if version[0] > 0:
                     record_list.append(hdf5_file[record_keys[num]])
                 else:
                     extra_rec = rs.read_group(hdf5_file[record_keys[num]], file_type)
                     extra_rec.update(metadata)
                     record_list.append(extra_rec)
-        if records_previous > 0:
+        if records_previous > 0:#For extra records prior to the given set from idx_group tuple
             if idx !=0:
                 for num in range(idx - records_previous, idx):
                     if(num >= 0):
@@ -303,6 +307,8 @@ class BaseConvert(object):
             Supported kwargs include:
                 force: bool, if True will overwrite an existing output file
                 avg_num: int, how many records are grouped together for a single process_record() call
+                prev_rec: int, how many previous records are grouped together for a single process_record() call
+                record_list: list of tuples, where each tuple represents a start and end indice for a group of records to process at a time
                 num_processes: int, how many CPU cores to distribute the job across
                 keep_intermediate_files: bool, if True all intermediate files are not discarded
             Other kwargs may be supported by child classes and will be passed through to the process_record() function.
@@ -361,8 +367,9 @@ class BaseConvert(object):
                     all_records.remove("metadata")
 
             records_per_process = kwargs.get('avg_num', 1)      # Records getting averaged together.
-            records_previous = kwargs.get('prev_rec', 0)      # Records getting averaged together.
-            record_list = kwargs.get('record_list', [])
+            records_previous = kwargs.get('prev_rec', 0)      # Previous records to be included in processing
+            record_list = kwargs.get('record_list', [])         #list of start indices and end indices of what records to process
+
             if not kwargs.get('force', False):      # file may be partially processed, only process remaining records
                 final_records_remaining = sorted(list(
                     set(all_records[::records_per_process]).difference(finished_records)))
@@ -372,7 +379,7 @@ class BaseConvert(object):
             first_idx = all_records.index(final_records_remaining[0])   # first record to process
             if len(record_list) == 0:
                 num_to_process = round(len(all_records) / records_per_process)
-            else:
+            else:#if we are processing based off user input on certain section of the file
                 num_to_process = int(len(record_list) / records_per_process)
             num_completed = first_idx
             indices = range(first_idx, len(all_records), records_per_process)
@@ -404,7 +411,7 @@ class BaseConvert(object):
                     self._update_metadata(first_rec, outfile["metadata"], **kwargs)
                     kwargs['metadata'] = outfile['metadata']
                     del first_rec  # only need it for getting all the correct metadata
-                if len(record_list) == 0:
+                if len(record_list) == 0: #process through the file
                     function_to_call = partial(processing_machine,
                                                filename=file_to_process, record_keys=all_records,
                                                records_per_process=records_per_process, records_previous=records_previous,
@@ -425,7 +432,7 @@ class BaseConvert(object):
                             num_completed += 1
                             progress_bar(num_completed, num_to_process)
                     print('\r', flush=True, end='')     # Remove the progress bar
-                else:
+                else: #process the chunks of the file given by record_list
                     function_to_call = partial(processing_machine_grouped,
                                                filename=file_to_process, record_keys=all_records,
                                                records_per_process=records_per_process,
@@ -441,7 +448,7 @@ class BaseConvert(object):
                                 num_completed += 1
                                 progress_bar(num_completed, num_to_process)
                     else:  # Default single-worker
-                        for idx in record_list:
+                        for idx in record_list: #loop over the record list
                             completed_record, i = function_to_call(idx)
                             append_to_file(completed_record, i)
                             num_completed += 1
