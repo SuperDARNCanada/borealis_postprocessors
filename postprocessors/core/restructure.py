@@ -154,14 +154,15 @@ def write_records(hdf5_file: h5py.File, records: dict, version=(0, 5)):
                     group[name] = metadata[name]  # make a hard link to the dataset in the metadata group
                     return
                 data = group_dict[name]
-                field_metadata = {"description": descriptions[name]}
-                if name in units.keys():
-                    field_metadata["units"] = units[name]
-                if name in dim_labels.keys():
-                    field_metadata["dim_labels"] = dim_labels[name]
-                if name in dim_scales.keys():
-                    field_metadata["dim_scales"] = dim_scales[name]
-                _write_hdf5_field(name, data, field_metadata, group)
+                if name in descriptions.keys():
+                    field_metadata = {"description": descriptions[name]}
+                    if name in units.keys():
+                        field_metadata["units"] = units[name]
+                    if name in dim_labels.keys():
+                        field_metadata["dim_labels"] = dim_labels[name]
+                    if name in dim_scales.keys():
+                        field_metadata["dim_scales"] = dim_scales[name]
+                    _write_hdf5_field(name, data, field_metadata, group)
                 if is_scale:
                     group[name].make_scale(dim_nicknames[name])
 
