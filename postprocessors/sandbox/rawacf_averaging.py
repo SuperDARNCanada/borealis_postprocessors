@@ -56,7 +56,7 @@ class RawacfAvg(BaseConvert):
 
     def process_file(self, avg_dur: float = 3.7, **kwargs):
         """
-        Takes a rawacf file and averages records from the file based on a given averaging_duration.
+        Takes a rawacf file and averages records from the file based on a given `avg_dur` in seconds.
 
         Parameters
         ----------
