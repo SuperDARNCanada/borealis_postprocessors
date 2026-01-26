@@ -81,19 +81,16 @@ class RawacfAvg(BaseConvert):
 
         # loop over the timestamps until no more full averaging periods are available
         while start < len(collected_timestamps):
-            first = collected_timestamps[start]  # First sqn_timestamp of the average period
-            first_index = collected_indices[start]  # The corresponding index
+            first_tstamp = collected_timestamps[start]  # First sqn_timestamp of the average period
+            idx_of_first_record = collected_indices[start]  # The corresponding index
 
-            time_end = first + avg_dur  # The end of the avg_period
+            time_end = first_tstamp + avg_dur  # The end of the avg_period
             diff = np.abs(time_end - np.array(collected_timestamps))
             end = np.argmin(diff)  # The index in collected_timestamps for the closest timestamp to time_end
-            if (end+1) >= len(collected_timestamps):  # if there are no more full periods
-                break
-            else:
-                last = collected_timestamps[end]  # Last sqn_timestamp of the average period
-                last_index = collected_indices[end]  #T he corresponding index
-            num_seq = len(collected_timestamps[start:(end+1)])  # Number of sequences to expect
-            record_list.append((first_index, last_index, [first, last, num_seq]))
+            last_tstamp = collected_timestamps[end]  # Last sqn_timestamp of the average period
+            idx_of_last_record = collected_indices[end]  # The corresponding index
+            num_sqn = end - start + 1  # Number of sequences to expect
+            record_list.append((idx_of_first_record, idx_of_last_record, [first_tstamp, last_tstamp, num_sqn]))
             start = end + 1
         super().process_file(record_list = record_list, num_processes=1, **kwargs)
 
