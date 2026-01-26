@@ -313,7 +313,6 @@ class BaseConvert(object):
                     all_records.remove("metadata")
 
             records_per_process = kwargs.get('avg_num', 1)      # Records getting averaged together.
-            records_previous = kwargs.get('prev_rec', 0)      # Previous records to be included in processing
             record_list = kwargs.get('record_list', [])         # list of start indices and end indices of what records to process
 
             if not kwargs.get('force', False):      # file may be partially processed, only process remaining records
