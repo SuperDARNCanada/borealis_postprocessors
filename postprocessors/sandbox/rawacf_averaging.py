@@ -101,12 +101,9 @@ class RawacfAvg(BaseConvert):
         record: OrderedDict
             hdf5 record containing antennas_iq data and metadata
         extra_records: list of OrderedDicts
-            should be a list of OrderedDicts, which are the records to average.
-        idxer: tuple
-            Index of first record and index of last record to process at a time. Followed by list of the first sqn_tstamp, last sqn_tstamp and num_seqs for this average
-        kwargs:
-            Supported key: 'previous record'
-            'previous_records' Previous records that may also be included in the average.
+            Additional records to average.
+        sqn_indices: tuple
+            Index of first sequence, index of last sequence, and number of sequences to include in averaging. Indices are into sqn_timestamps when record and extra_records are flattened together.
         Returns
         -------
         record: OrderedDict
