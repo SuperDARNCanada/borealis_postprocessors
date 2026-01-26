@@ -77,9 +77,6 @@ class RawacfAvg(BaseConvert):
 
 
         record_list = []  # A list of tuples that indicate the first and last records to grab for one process record call
-        start = 0  # counter
-
-        # loop over the timestamps until no more full averaging periods are available
         while start < len(collected_timestamps):
             first_tstamp = collected_timestamps[start]  # First sqn_timestamp of the average period
             idx_of_first_record = collected_indices[start]  # The corresponding index
