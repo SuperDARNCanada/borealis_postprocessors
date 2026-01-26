@@ -4,31 +4,11 @@
 This file contains functions for averaging rawacfs
 """
 from collections import OrderedDict
-from typing import Union
 import numpy as np
 from postprocessors import BaseConvert
-import postprocessors
-import os
-import traceback
 import h5py
-from functools import partial
-from multiprocessing import get_context
 import pydarnio
-import postprocessors.core.convert_base as cb
-import postprocessors.core.restructure as rs
-import postprocessors.core.antennas_iq_to_rawacf as a2raw
-from postprocessors import conversion_exceptions
-import datetime as dt
-
-try:
-    import cupy as xp
-except ImportError:
-    import numpy as xp
-
-    cupy_available = False
-else:
-    cupy_available = True
-
+from postprocessors.core.antennas_iq_to_rawacf import AntennasIQ2Rawacf
 import logging
 
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
