@@ -95,7 +95,7 @@ class RawacfAvg(BaseConvert):
         super().process_file(record_list = record_list, num_processes=1, **kwargs)
 
     @staticmethod
-    def process_record(record: OrderedDict, extra_records, idxer,  **kwargs) -> OrderedDict:
+    def process_record(record: OrderedDict, extra_records, sqn_indices, **kwargs) -> OrderedDict:
         """
         Takes a set of records from a rawacf file and averages for a specified averaging_duration.
 
