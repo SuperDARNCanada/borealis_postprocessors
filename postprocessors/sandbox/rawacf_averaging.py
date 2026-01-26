@@ -43,8 +43,6 @@ class RawacfAvg(BaseConvert):
         infile_type: str
             Type of data file. Types include:
             'antennas_iq, bfiq'
-        outfile_type: str
-            Desired type of output data file. Same types as above.
         infile_structure: str
             Borealis structure of input file. Either 'array' or 'site'.
         outfile_structure: str
