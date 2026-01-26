@@ -196,8 +196,7 @@ class RawacfAvg(BaseConvert):
         record[data_str] = data
 
         # Convert the AntennasIQ record to Rawacf
-        toConvert = a2raw.AntennasIQ2Rawacf
-        record = toConvert.process_record(record, **kwargs)
+        record = AntennasIQ2Rawacf.process_record(record, **kwargs)
 
         record['main_acfs'] = np.complex64(record['main_acfs'])
         record['intf_acfs'] = np.complex64(record['intf_acfs'])
