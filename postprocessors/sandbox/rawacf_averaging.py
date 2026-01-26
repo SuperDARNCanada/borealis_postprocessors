@@ -28,18 +28,6 @@ class RawacfAvg(BaseConvert):
     ProcessBfiq2Rawacf
     ProcessAntennasIQ2Rawacf
 
-    Attributes
-    ----------
-    infile: str
-        The filename of the input antennas_iq file.
-    outfile: str
-        The file name of output file
-    infile_structure: str
-        The write structure of the file. Structures include:
-        'array'
-        'site'
-    outfile_structure: str
-        The desired structure of the output file. Same structures as above, plus 'dmap'.
     """
 
     def __init__(self, infile: str, outfile: str, infile_type: str, infile_structure: str, outfile_structure: str):
