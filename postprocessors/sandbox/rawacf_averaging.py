@@ -65,7 +65,6 @@ class RawacfAvg(BaseConvert):
         """
 
         collected_timestamps = []  # Total list sqn_timestamps
-        all_records = []  # Total list of keys from all records
         collected_indices = []  # list of what record (as an index number) each item in collected_timestamps belongs too
 
         with h5py.File(self.infile, 'r') as infile:
