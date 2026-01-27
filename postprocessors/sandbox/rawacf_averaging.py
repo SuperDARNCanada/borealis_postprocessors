@@ -16,7 +16,7 @@ postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 class RawacfAvg(BaseConvert):
     """
-    Class for conversion of Widebeam to normalscan for beam-broadening experiments. This class
+    Class for averaging rawacf's by starting with antennasIQ. This class
     inherits from BaseConvert, which handles all functionality generic to postprocessing borealis files.
     #note array type input does not work
 
@@ -66,7 +66,7 @@ class RawacfAvg(BaseConvert):
 
         collected_timestamps = []  # Total list sqn_timestamps
         collected_indices = []  # list of what record (as an index number) each item in collected_timestamps belongs too
-
+        indices_per_record = []
         with h5py.File(self.infile, 'r') as infile:
             all_records = sorted(list(infile.keys()))
             for i, rec in enumerate(all_records):
@@ -74,25 +74,31 @@ class RawacfAvg(BaseConvert):
                 if "sqn_timestamps" in inner_keys:
                     collected_timestamps += list(infile[rec]['sqn_timestamps'][()])
                     collected_indices += [i]*len(infile[rec]['sqn_timestamps'][()])
-
+                    indices_per_record += list(range(0, len(infile[rec]['sqn_timestamps'][()])))
+        collected_timestamps = np.array(collected_timestamps)
+        collected_indices = np.array(collected_indices)
+        indices_per_record = np.array(indices_per_record)
 
         record_list = []  # A list of tuples that indicate the first and last records to grab for one process record call
+        add_avg_info = []
+        start = 0
         while start < len(collected_timestamps):
             first_tstamp = collected_timestamps[start]  # First sqn_timestamp of the average period
             idx_of_first_record = collected_indices[start]  # The corresponding index
-
             time_end = first_tstamp + avg_dur  # The end of the avg_period
             diff = np.abs(time_end - np.array(collected_timestamps))
             end = np.argmin(diff)  # The index in collected_timestamps for the closest timestamp to time_end
             last_tstamp = collected_timestamps[end]  # Last sqn_timestamp of the average period
             idx_of_last_record = collected_indices[end]  # The corresponding index
             num_sqn = end - start + 1  # Number of sequences to expect
-            record_list.append((idx_of_first_record, idx_of_last_record, [first_tstamp, last_tstamp, num_sqn]))
+            record_list.append((idx_of_first_record, idx_of_last_record, ))
+            add_avg_info.append([first_tstamp, last_tstamp, num_sqn, avg_dur])
+            # record_list.append((idx_of_first_record, idx_of_last_record, [indices_per_record[start], [indices_per_record[end], num_sqn, avg_dur]))
             start = end + 1
-        super().process_file(record_list = record_list, num_processes=1, **kwargs)
+        super().process_file(record_list = record_list, num_processes=1, add_avg_info = add_avg_info, **kwargs)
 
     @staticmethod
-    def process_record(record: OrderedDict, extra_records, sqn_indices, **kwargs) -> OrderedDict:
+    def process_record(record: OrderedDict, extra_records, sqn_indices, add_avg_info, **kwargs) -> OrderedDict:
         """
         Takes a set of records from a rawacf file and averages for a specified averaging_duration.
 
@@ -113,7 +119,8 @@ class RawacfAvg(BaseConvert):
         # Combine the record lists into one
         total_records = [record] + extra_records
 
-        end_points = idxer[2]  # Grab the value in end_points for this averaging period
+        end_points = add_avg_info[sqn_indices]  # Grab the value in end_points for this averaging period
+    #maybe comment from here to
         flag0 = False
         flag1 = False
 
@@ -134,6 +141,9 @@ class RawacfAvg(BaseConvert):
             if flag0 and flag1:
                 break
         total_records = total_records[trunc_ind0:(trunc_ind1+1)]  # only keep the records we want
+        #here
+
+
         total_seq = end_points[2]  # Total number of sequences
 
         if "data_dimensions" in list(record.keys()):
@@ -156,7 +166,9 @@ class RawacfAvg(BaseConvert):
         gps_to_system_time_diff = list()
 
         data = np.array([])
-
+        #let end = endpoint[1] - len(record['sqn_timestamps'])
+        # append everything below together without seq
+        #then grab by splicing endpoint[0]:end
         for i, rec in enumerate(total_records):
             rec_timestamps = np.array(list(map(float, rec['sqn_timestamps'])))  # sqn_timestamps for this record
             seq = np.where( (float(end_points[0])<=rec_timestamps) & (rec_timestamps<=float(end_points[1])) )[0]  # indices for sequences we keep
@@ -169,20 +181,12 @@ class RawacfAvg(BaseConvert):
 
             gps_to_system_time_diff.extend([rec['gps_to_system_time_diff']])
 
-            avg_sqn= [rec_timestamps[i]-rec_timestamps[i-1] for i in range(1, len(rec_timestamps))]
-            average_sqn= sum(avg_sqn)/len(avg_sqn)
-
-            if (np.max(seq) +1) < len(rec_timestamps):
-                int_time += rec_timestamps[np.max(seq) + 1] - rec_timestamps[seq][0]
-            else:
-                int_time += rec_timestamps[seq][-1] - rec_timestamps[seq][0] + average_sqn
-
             if i ==0:
                 data = rec[data_str][:, seq, :]
             else:
                 data = np.concatenate((data, rec[data_str][:, seq, :]), axis=1)
 
-        record['int_time'] = np.float32(int_time)
+        record['int_time'] = np.float32(end_points[3])
         record['num_sequences'] = total_seq
         record['sqn_timestamps'] = sqn_timestamps
         if 'noise_at_freq' in list(record.keys()):
