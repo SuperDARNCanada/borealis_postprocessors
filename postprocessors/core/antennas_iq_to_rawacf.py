@@ -6,7 +6,7 @@ to rawacf files.
 """
 from collections import OrderedDict
 import h5py
-
+import numpy as np
 from postprocessors import BaseConvert, AntennasIQ2Bfiq, Bfiq2Rawacf
 
 
@@ -70,6 +70,9 @@ class AntennasIQ2Rawacf(AntennasIQ2Bfiq, Bfiq2Rawacf):
         """
         record = super(AntennasIQ2Rawacf, cls).process_record(record, **kwargs) # Calls AntennasIQ2Bfiq.process_record()
         record = super(AntennasIQ2Bfiq, cls).process_record(record, **kwargs)   # Calls Bfiq2Rawacf.process_record()
+        record['main_acfs'] = np.complex64(record['main_acfs'])
+        record['intf_acfs'] = np.complex64(record['intf_acfs'])
+        record['xcfs'] = np.complex64(record['xcfs'])
 
         return record
 
