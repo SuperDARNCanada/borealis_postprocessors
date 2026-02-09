@@ -55,14 +55,15 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
 
     Returns
     -------
-    formatted_record, idx: properly-formatted processed record and the index which was processed.
+    formatted_record, idx: properly-formatted processed record and the index which was processed or the first index of
+                           record_indices group.
     """
     if "metadata" in kwargs:
         metadata = rs.read_group(kwargs["metadata"], file_type)
     else:
         metadata = dict()  # This is purely to avoid a bunch of if statements later checking if "metadata" in kwargs
     index = idx
-    if len(record_indices) != 0:
+    if len(record_indices) != 0: #Check if record_list is to be used or not
         idx = record_indices[index][0]
         final_idx = record_indices[index][1]
     with h5py.File(filename, 'r') as hdf5_file:
@@ -94,7 +95,7 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
                     extra_rec = rs.read_group(hdf5_file[record_keys[num]], file_type)
                     extra_rec.update(metadata)
                     record_list.append(extra_rec)
-    processed_record = processing_fn(record_dict, extra_records=record_list, sqn_indices=index,  **kwargs)
+    processed_record = processing_fn(record_dict, extra_records=record_list, rec_indices=index,  **kwargs)
 
     if processed_record is None:
         return None, idx
@@ -220,7 +221,6 @@ class BaseConvert(object):
             Supported kwargs include:
                 force: bool, if True will overwrite an existing output file
                 avg_num: int, how many records are grouped together for a single process_record() call
-                prev_rec: int, how many previous records are grouped together for a single process_record() call
                 record_list: list of tuples, where each tuple represents a start and end indice for a group of records to process at a time
                 num_processes: int, how many CPU cores to distribute the job across
                 keep_intermediate_files: bool, if True all intermediate files are not discarded
