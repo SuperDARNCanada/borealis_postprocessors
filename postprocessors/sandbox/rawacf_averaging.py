@@ -15,7 +15,7 @@ postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 class RawacfAvg(BaseConvert):
     """
-    Class for averaging rawacf's using inputted averaging duration from an antennasIQ File. This class
+    Class for averaging rawacf's using inputted averaging duration from an "antennas_iq" File. This class
     inherits from BaseConvert, which handles all functionality generic to postprocessing borealis files.
 
     See Also
@@ -62,9 +62,12 @@ class RawacfAvg(BaseConvert):
             Averaging duration in seconds to be used.
         """
 
-        collected_timestamps = []  # Total list sqn_timestamps
+        collected_timestamps = []  # Total list sqn_timestamps across all records
         collected_indices = []  # list of what record (as index number) each item in collected_timestamps belongs too
+                                # i.e first record -> idx of 0, second record -> idx of 1...
+                                # -> [0, 0, ..., 0, 1, 1, ..., 1, 2, ..., 2,...]
 
+        #  Fill in collected_timestamps and collected_indices
         with h5py.File(self.infile, 'r') as infile:
             all_records = sorted(list(infile.keys()))
             for i, rec in enumerate(all_records):
@@ -74,14 +77,16 @@ class RawacfAvg(BaseConvert):
                     collected_indices += [i]*len(infile[rec]['sqn_timestamps'][()])
             collected_indices = np.array(collected_indices) #to enable searching for sqn timestamp idx
 
-        record_list = []  # A list of tuples that indicate first and last records to grab for one process record call
+        #  record_list: A list of tuples that indicate first and last records to grab for one process record call
+        record_list = []  # i.e [(0,2), (2, 3)...], first process_record() will process records 0, 1 and 2
+
         sqn_indices = []  # additional information such as starting, ending ind, avg_dur and # of seq to avg
 
         start = 0 #The index in collected_timestamps for the first timestamp
         while start < len(collected_timestamps):
             #  Find the first timestamp, its rec idx then find the last timestamps rec idx
-            first_tstamp = collected_timestamps[start]
-            idx_of_first_record = collected_indices[start]
+            first_tstamp = collected_timestamps[start]  # in first loop this is the first value of collected_timestamps
+            idx_of_first_record = collected_indices[start]  # in first loop this is value will be 0
             time_end = first_tstamp + avg_dur
 
             diff = np.abs(time_end - np.array(collected_timestamps))
@@ -90,14 +95,22 @@ class RawacfAvg(BaseConvert):
 
             num_sqn = end - start + 1  # Number of sequences to expect
 
-            #  The indices of region corresponding to the first record
-            where_col_idx = np.where(collected_indices[()]==idx_of_first_record)[0]
-            first_idx_tstmp = np.where(where_col_idx == start)[0][0] #indicates the indice of starting sqn_timestamp
+            #  The indices of region corresponding to the first record/idx_of_first_record
+            where_n_fir_rec = np.where(collected_indices[()]==idx_of_first_record)[0]
+            #  To find the index that first_tstamp would appear in the first records' rec['sqn_timestamp']
+            #  search for where in where_n_fir_rec is equal to start
+            first_idx_tstmp = np.where(where_n_fir_rec == start)[0][0] #indicates the indice of starting sqn_timestamp
 
-            #  The indices of region corresponding to the last record
-            where_col_idx = np.where(collected_indices == idx_of_last_record)[0]
-            #  This indicates the indice of ending sqn_timestamp in reference to end
-            last_idx_tstmp = np.where(where_col_idx == end)[0][0] -len(np.where(collected_indices==idx_of_last_record)[0])
+            #  The indices of region corresponding to the last record/idx_of_last_record
+            where_n_las_rec = np.where(collected_indices == idx_of_last_record)[0]
+            #  To find the index that last_tstamp would appear in the last records' rec['sqn_timestamp']
+            #  search for where in where_n_las_rec is equal to end.
+            #  NOTE: that in process_record the two records are concatenated, so we want the index w.r.t end of array
+            #        This means negative indexing. To do this we should subtract by the length of last records'
+            #        rec['sqn_timestamp'] which is the same as length of where_n_las_rec
+            #        This indicates the indice of ending sqn_timestamp in reference to end
+
+            last_idx_tstmp = np.where(where_n_las_rec == end)[0][0] -len(where_n_las_rec)
 
             sqn_indices.append([first_idx_tstmp, last_idx_tstmp,num_sqn, avg_dur])
 
@@ -119,7 +132,7 @@ class RawacfAvg(BaseConvert):
         rec_indices: int
             Index of what record or record set is being processed
         sqn_indices: list
-            Index of first sequence (relative to beginning), index of last sequence (relative to the end),
+            Index of first sequence, index of last sequence,
             averaging duration, and number of sequences to include in averaging.
             Indices are into sqn_timestamps when record and extra_records are flattened together.
         Returns
@@ -161,9 +174,9 @@ class RawacfAvg(BaseConvert):
             if 'noise_at_freq' in list(record.keys()):
                 noise_at_freq.extend(rec['noise_at_freq'][()])
             if i == 0:
-                data = rec[data_str][:, :, :]
+                data = rec[data_str]
             else:
-                data = np.concatenate((data, rec[data_str][:, :, :]), axis=1)
+                data= np.concatenate((data, rec[data_str]), axis=1)
 
         #  Grab the sequences wanted
         if (end==0):  # At the end of array

@@ -10,6 +10,8 @@ from typing import Union
 import h5py
 from functools import partial
 from multiprocessing import get_context
+import datetime as dt
+from datetime import timezone
 
 import postprocessors.core.restructure as rs
 from postprocessors import conversion_exceptions
@@ -298,14 +300,26 @@ class BaseConvert(object):
             num_completed = first_idx
 
             # Do the processing on each record
-            with h5py.File(processed_file, 'a') as outfile:
+            with (h5py.File(processed_file, 'a') as outfile):
                 def append_to_file(rec, idx):
                     """Convenience function to append to file"""
                     if rec is not None:
                         if isinstance(rec, list):  # If rec is a list of records
                             rs.write_records(outfile, {all_records[idx + i]: r for i, r in enumerate(rec)}, version=version)
                         else:
-                            rs.write_records(outfile, {all_records[idx]: rec}, version=version)
+                            new_rec_name = all_records[idx]  # Default Record Name
+                            if version[0] > 0:
+                                sqn_timestamp = xp.around(rec['sqn_timestamps'][0], 3)  # First timestamp in record
+                                old_rec_name = dt.datetime.strptime(all_records[idx], "%Y%m%d-%H%M-%S.%f")
+                                old_rec_name = old_rec_name.replace(tzinfo=timezone.utc).timestamp()
+                                if old_rec_name != sqn_timestamp:
+                                    new_rec_name = dt.datetime.utcfromtimestamp(sqn_timestamp).strftime("%Y%m%d-%H%M-%S.%f")
+                            else:
+                                sqn_timestamp = xp.trunc(rec['sqn_timestamps'][0] * 10 ** 3) / 10 ** 3  # First timestamp in record
+                                old_rec_name = int(all_records[idx])/1000
+                                if old_rec_name != sqn_timestamp:
+                                    new_rec_name = str(int(sqn_timestamp*1000))
+                            rs.write_records(outfile, {new_rec_name: rec}, version=version)
 
                 def progress_bar(done_so_far, total):
                     """Convenience function to print a progress bar"""
