@@ -45,14 +45,12 @@ def compare_files(file1, file2):
             else:
                 # Compare floating-point values differently
                 if 'float' in str(entry1.dtype) or 'complex' in str(entry1.dtype):
-                    lhs = entry1[()].flatten()
-                    rhs = entry2[()].flatten()
-                    if not np.allclose(lhs, rhs, equal_nan=True):
+                    if not np.allclose(entry1[()].flatten(), entry2[()].flatten(), equal_nan=True):
                         compare_string += prefix + f"/{key}:\n" \
                                                    f"\t{entry1}\n" \
                                                    f"\t{entry2}\n" \
                                                    f"\tDifference: " \
-                                                   f"{np.nanmax(np.abs((lhs - rhs) / lhs))}\n"
+                                                   f"{np.nanmax(np.abs((entry1[()] - entry2[()])/entry1[:]))}\n"
                 # Comparing non-floating-point values
                 elif not np.array_equal(entry1, entry2):
                     compare_string += prefix + f"/{key}:\n" \

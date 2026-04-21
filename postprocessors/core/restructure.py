@@ -9,7 +9,7 @@ import numpy as np
 import h5py
 
 
-def read_group(group: h5py.Group, file_type: str):
+def read_group(group: h5py.Group, file_type: str, no_dim_scales=False):
     """
     Reads a group from an HDF5 file into a dictionary.
 
@@ -53,53 +53,55 @@ def read_group(group: h5py.Group, file_type: str):
         if 'units' in dset.attrs.keys():
             units[dset_name] = dset.attrs['units']
 
-        # Get all the information about Dimension Scales from the group
-        labels = []
-        nicknames = []
-        scales = []
-        for dim in dset.dims:
-            labels.append(dim.label)  # this is the easy-to-read name, e.g. "range"
-            if h5py.h5ds.is_scale(dset._id):
-                continue
-            scale_nicknames = dim.keys()  # e.g. the `range_gate` field has a nickname `range gate`
-            if len(scale_nicknames) == 0:
-                continue
-            elif len(scale_nicknames) > 1:  # Could be multiple dim scales for a single dimension
-                nested_scales = []
-                nested_nicknames = []
-                for i, name in enumerate(scale_nicknames):
-                    dim_field = dim[i]  # get the actual dataset that is the dimension scale, e.g. the `range_gate` dataset
-                    scale = dim_field.name.split('/')[-1]  # get the name of that dataset, e.g. `range_gate`
-                    if name == '':
+        if not no_dim_scales:
+            # Get all the information about Dimension Scales from the group
+            labels = []
+            nicknames = []
+            scales = []
+            for dim in dset.dims:
+                labels.append(dim.label)  # this is the easy-to-read name, e.g. "range"
+                if h5py.h5ds.is_scale(dset._id):
+                    continue
+                scale_nicknames = dim.keys()  # e.g. the `range_gate` field has a nickname `range gate`
+                if len(scale_nicknames) == 0:
+                    continue
+                elif len(scale_nicknames) > 1:  # Could be multiple dim scales for a single dimension
+                    nested_scales = []
+                    nested_nicknames = []
+                    for i, name in enumerate(scale_nicknames):
+                        dim_field = dim[i]  # get the actual dataset that is the dimension scale, e.g. the `range_gate` dataset
+                        scale = dim_field.name.split('/')[-1]  # get the name of that dataset, e.g. `range_gate`
+                        if name == '':
+                            nickname = scale
+                        else:
+                            nickname = name
+                        dim_nicknames[scale] = nickname  # record the nickname (`range gate`) for that dimension scale dataset (`range_gate`)
+                        nested_scales.append(scale)  # e.g. add `range_gate` to the list of dimension scale datasets
+                        nested_nicknames.append(nickname)
+                    scales.append(nested_scales)
+                    nicknames.append(nested_nicknames)
+                else:
+                    dim_field = dim[0]
+                    scale = dim_field.name.split('/')[-1]
+                    scales.append(scale)
+                    if scale_nicknames[0] == '':
                         nickname = scale
                     else:
-                        nickname = name
-                    dim_nicknames[scale] = nickname  # record the nickname (`range gate`) for that dimension scale dataset (`range_gate`)
-                    nested_scales.append(scale)  # e.g. add `range_gate` to the list of dimension scale datasets
-                    nested_nicknames.append(nickname)
-                scales.append(nested_scales)
-                nicknames.append(nested_nicknames)
-            else:
-                dim_field = dim[0]
-                scale = dim_field.name.split('/')[-1]
-                scales.append(scale)
-                if scale_nicknames[0] == '':
-                    nickname = scale
-                else:
-                    nickname = scale_nicknames[0]
-                dim_nicknames[scale] = nickname
-                nicknames.append(nickname)
-        if len(labels) > 0:
-            dim_labels[dset_name] = labels
-        if len(scales) > 0:
-            dim_scales[dset_name] = scales  # Possibly nested list of dsets associated with each dim
+                        nickname = scale_nicknames[0]
+                    dim_nicknames[scale] = nickname
+                    nicknames.append(nickname)
+            if len(labels) > 0:
+                dim_labels[dset_name] = labels
+            if len(scales) > 0:
+                dim_scales[dset_name] = scales  # Possibly nested list of dsets associated with each dim
 
-    if len(descriptions) > 0:  # descriptions are required for Borealis v1.0+, so this essentially is flagging v1.0 files
-        group_dict['descriptions'] = descriptions
-        group_dict['units'] = units
-        group_dict['dim_labels'] = dim_labels
-        group_dict['dim_scales'] = dim_scales
-        group_dict['dim_nicknames'] = dim_nicknames
+        if len(descriptions) > 0:  # descriptions are required for Borealis v1.0+, so this essentially is flagging v1.0 files
+            group_dict['descriptions'] = descriptions
+            group_dict['units'] = units
+            if not no_dim_scales:
+                group_dict['dim_labels'] = dim_labels
+                group_dict['dim_scales'] = dim_scales
+                group_dict['dim_nicknames'] = dim_nicknames
 
     # Get the attributes (scalar fields)
     attribute_dict = {}
@@ -154,15 +156,14 @@ def write_records(hdf5_file: h5py.File, records: dict, version=(0, 5)):
                     group[name] = metadata[name]  # make a hard link to the dataset in the metadata group
                     return
                 data = group_dict[name]
-                if name in descriptions.keys():
-                    field_metadata = {"description": descriptions[name]}
-                    if name in units.keys():
-                        field_metadata["units"] = units[name]
-                    if name in dim_labels.keys():
-                        field_metadata["dim_labels"] = dim_labels[name]
-                    if name in dim_scales.keys():
-                        field_metadata["dim_scales"] = dim_scales[name]
-                    _write_hdf5_field(name, data, field_metadata, group)
+                field_metadata = {"description": descriptions[name]}
+                if name in units.keys():
+                    field_metadata["units"] = units[name]
+                if name in dim_labels.keys():
+                    field_metadata["dim_labels"] = dim_labels[name]
+                if name in dim_scales.keys():
+                    field_metadata["dim_scales"] = dim_scales[name]
+                _write_hdf5_field(name, data, field_metadata, group)
                 if is_scale:
                     group[name].make_scale(dim_nicknames[name])
 
@@ -193,15 +194,7 @@ def write_records(hdf5_file: h5py.File, records: dict, version=(0, 5)):
                             dset.attrs['strtype'] = b'unicode'
                             dset.attrs['itemsize'] = v.dtype.itemsize // 4  # every character is 4 bytes
                         else:
-                            if 'descriptors' in k: #This is to work around splicing error as np.bytes_(v) when v is 'data_descriptors' fails
-                                v_dum = []
-                                for d in v:
-                                    v_dum.append(np.bytes_(d))
-                                v_dum = np.array(v_dum)
-                                group.create_dataset(k, data=v_dum)
-                            else:
-                                group.create_dataset(k, data=np.bytes_(v))
-                            # group.create_dataset(k, data=v)
+                            group.create_dataset(k, data=np.bytes_(v))
                     else:
                         group.create_dataset(k, data=v)
                 else:
