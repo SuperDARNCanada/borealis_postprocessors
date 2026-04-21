@@ -3,32 +3,25 @@
 """
 This file contains base functionality for postprocessing of Borealis data files.
 """
+import copy
 import os
 import traceback
 from collections import OrderedDict
-from typing import Union
 import h5py
 from functools import partial
 from multiprocessing import get_context
+import pydarnio
+from tqdm import tqdm
 
 import postprocessors.core.restructure as rs
 from postprocessors import conversion_exceptions
 
-try:
-    import cupy as xp
-except ImportError:
-    import numpy as xp
-    cupy_available = False
-else:
-    cupy_available = True
-
 import logging
-
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
 def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, processing_fn,
-                       file_type: str, **kwargs):
+                       infile_type: str, outfile_type: str, version: tuple, **kwargs):
     """
     Helper function for processing a single record. It is defined here to facilitate multiprocessing.
 
@@ -44,8 +37,12 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         Number of records to process per call to this function.
     processing_fn: callable
         Function to call to process a record.
-    file_type: str
+    infile_type: str
         File type that is being processed. One of 'antennas_iq', 'bfiq', or 'rawacf'.
+    outfile_type: str
+        Resulting file type. One of 'antennas_iq', 'bfiq', or 'rawacf'.
+    version: tuple
+        Version numbers of the record. (major, minor[, patch])
     kwargs: dict
         Key-word arguments to pass to processing_fn
 
@@ -54,21 +51,49 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
     formatted_record, idx: properly-formatted processed record and the index which was processed.
     """
     with h5py.File(filename, 'r') as hdf5_file:
-        record_dict = rs.read_group(hdf5_file[record_keys[idx]], file_type)
+        metadata = copy.deepcopy(kwargs.get("metadata", dict()))
+        record_dict = rs.read_group(hdf5_file[record_keys[idx]], infile_type, no_dim_scales=kwargs.get("dmap", False))
+        record_dict['descriptions'].update(metadata.pop('descriptions'))
+        record_dict['units'].update(metadata.pop('units'))
+        if not kwargs.get("dmap", False):
+            record_dict['dim_labels'].update(metadata.pop('dim_labels'))
+            record_dict['dim_scales'].update(metadata.pop('dim_scales'))
+            record_dict['dim_nicknames'].update(metadata.pop('dim_nicknames'))
+        record_dict.update(metadata)
         record_list = []  # List of all 'extra' records to process
 
         # If processing multiple records at a time, get all the records ready
         if records_per_process > 1:
             for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
-                record_list.append(rs.read_group(hdf5_file[record_keys[num]], file_type))
+                if version[0] > 0:
+                    record_list.append(hdf5_file[record_keys[num]])
+                else:
+                    extra_rec = rs.read_group(hdf5_file[record_keys[num]], infile_type, no_dim_scales=kwargs.get("dmap", False))
+                    if not kwargs.get("dmap", False):
+                        extra_rec.update(metadata)
+                    record_list.append(extra_rec)
 
     processed_record = processing_fn(record_dict, extra_records=record_list, **kwargs)
 
     if processed_record is None:
         return None, idx
+
+    # Convert to numpy arrays for saving to file
+    formatted_record = rs.convert_to_numpy(processed_record, version=version)
+
+    if kwargs.get("dmap", None):
+        if outfile_type == 'rawacf':
+            convert_fn = pydarnio.BorealisV1Convert.convert_rawacf_record
+            dmap_fn = pydarnio.write_rawacf
+        elif outfile_type == 'bfiq':
+            convert_fn = pydarnio.BorealisV1Convert.convert_bfiq_record
+            dmap_fn = pydarnio.write_iqdat
+        else:
+            raise RuntimeError("Unable to convert record to DMAP")
+        dmap_record = convert_fn(processed_record, metadata, filename)
+        dmap_bytes = dmap_fn(dmap_record)
+        return dmap_bytes, idx
     else:
-        # Convert to numpy arrays for saving to file
-        formatted_record = rs.convert_to_numpy(processed_record)
         return formatted_record, idx
 
 
@@ -187,29 +212,36 @@ class BaseConvert(object):
                 keep_intermediate_files: bool, if True all intermediate files are not discarded
             Other kwargs may be supported by child classes and will be passed through to the process_record() function.
         """
-
         if os.path.isfile(self.outfile) and not kwargs.get('force', False):
             choice = input(f'Output file {self.outfile} already exists. Proceed anyway? Only records which don\'t '
                            f'exist in output file will be processed. (y/n): ')
             if choice[0] not in ['y', 'Y']:
                 return 0
 
+        version = self._get_version()
         try:
             # Restructure to 'site' format if necessary
             if self.infile_structure != 'site':
+                if version[0] >= 1:
+                    raise ValueError("All files after Borealis v1.0 are site-structured")
                 file_to_process = f'{self.infile}.site'
                 if not kwargs.get('keep_intermediate_files', False):
                     file_to_process += '.tmp'
                 self._temp_files.append(file_to_process)
                 # Restructure file to site format for processing
                 postprocessing_logger.info(f'Restructuring file {self.infile} --> {file_to_process}')
-                rs.restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site')
+                rs.restructure(self.infile, file_to_process, self.infile_type, self.infile_structure, 'site', version[0])
             else:
                 file_to_process = self.infile
 
             # Prepare to restructure after processing, if necessary
             if self.outfile_structure != 'site':
-                processed_file = f'{self.outfile}.site'
+                if version[0] < 1:
+                    processed_file = f'{self.outfile}.site'
+                elif self.outfile_structure != 'dmap':
+                    raise ValueError("Cannot have array-structured Borealis v1.0+ file")
+                else:
+                    processed_file = f'{self.outfile}.h5'
                 if not kwargs.get('keep_intermediate_files', False):
                     processed_file += '.tmp'
                 self._temp_files.append(processed_file)
@@ -227,6 +259,8 @@ class BaseConvert(object):
             # Load record names from file
             with h5py.File(file_to_process, 'r') as infile:
                 all_records = sorted(list(infile.keys()))
+                if version[0] >= 1:
+                    all_records.remove("metadata")
 
             records_per_process = kwargs.get('avg_num', 1)      # Records getting averaged together.
             if not kwargs.get('force', False):      # file may be partially processed, only process remaining records
@@ -236,49 +270,60 @@ class BaseConvert(object):
                 final_records_remaining = all_records[::records_per_process]
 
             first_idx = all_records.index(final_records_remaining[0])   # first record to process
-            num_to_process = round(len(all_records) / records_per_process)
-            num_completed = first_idx
             indices = range(first_idx, len(all_records), records_per_process)
 
-            function_to_call = partial(processing_machine,
-                                       filename=file_to_process, record_keys=all_records,
-                                       records_per_process=records_per_process,
-                                       processing_fn=self.process_record, file_type=self.infile_type,
-                                       **kwargs)
+            dmap_flag = self.outfile_structure in ('dmap', 'iqdat')
+            if dmap_flag:
+                dmap_outfile = open(self.outfile, 'ab')
 
             # Do the processing on each record
             with h5py.File(processed_file, 'a') as outfile:
-                def append_to_file(rec):
+                def append_to_file(rec, idx):
                     """Convenience function to append to file"""
                     if rec is not None:
-                        rs.write_records(outfile, {all_records[i]: rec})
+                        rs.write_records(outfile, {all_records[idx]: rec}, version=version)
 
-                def progress_bar(done_so_far, total):
-                    """Convenience function to print a progress bar"""
-                    completion_percentage = done_so_far / total
-                    bar_width = 60  # arbitrary width
-                    filled = int(bar_width * completion_percentage)
-                    unfilled = bar_width - filled
-                    print(f'\r[{"=" * filled}{" " * unfilled}] {completion_percentage * 100:.2f}%', flush=True, end='')
+                # Add the metadata to outfile first
+                if version[0] >= 1:
+                    with h5py.File(file_to_process, 'r') as infile:
+                        metadata = rs.read_group(infile['metadata'], self.infile_type)
+                        first_rec = rs.read_group(infile[all_records[0]], self.infile_type)
+                    rs.write_records(outfile, {"metadata": metadata}, version=version)
+                    self._update_metadata(first_rec, outfile["metadata"], **kwargs)
+                    kwargs['metadata'] = rs.read_group(outfile["metadata"], self.outfile_type)
+                    del first_rec  # only need it for getting all the correct metadata
 
-                if 'num_processes' in kwargs:   # Use multiprocessing if specified
-                    with get_context("spawn").Pool(kwargs.get('num_processes', 1)) as p:
-                        for completed_record, i in p.imap(function_to_call, indices):
-                            append_to_file(completed_record)
-                            num_completed += 1
-                            progress_bar(num_completed, num_to_process)
+                function_to_call = partial(processing_machine,
+                                           filename=file_to_process, record_keys=all_records,
+                                           records_per_process=records_per_process,
+                                           processing_fn=self.process_record, infile_type=self.infile_type,
+                                           outfile_type=self.outfile_type,
+                                           version=version, dmap=dmap_flag,
+                                           **kwargs)
+
+                num_processes = kwargs.get("num_processes", 1)
+                if num_processes > 1:   # Use multiprocessing if specified
+                    with get_context("spawn").Pool(num_processes) as p:
+                        for completed_record, i in tqdm(p.imap(function_to_call, indices), total=len(indices)):
+                            if dmap_flag:
+                                dmap_outfile.write(completed_record)
+                            else:
+                                append_to_file(completed_record, i)
                 else:   # Default single-worker
-                    for idx in indices:
+                    for idx in tqdm(indices):
                         completed_record, i = function_to_call(idx)
-                        append_to_file(completed_record)
-                        num_completed += 1
-                        progress_bar(num_completed, num_to_process)
-                print('\r', flush=True, end='')     # Remove the progress bar
+                        if dmap_flag:
+                            dmap_outfile.write(completed_record)
+                        else:
+                            append_to_file(completed_record, i)
+                # print('\r', flush=True, end='')     # Remove the progress bar
 
             # Restructure to final structure format, if necessary
             if self.outfile_structure != 'site':
                 postprocessing_logger.info(f'Restructuring file {processed_file} --> {self.outfile}')
-                rs.restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure)
+                rs.restructure(processed_file, self.outfile, self.outfile_type, 'site', self.outfile_structure, version[0])
+            if dmap_flag:
+                os.remove(processed_file)
         except (Exception,) as e:
             postprocessing_logger.error(f'Could not process file {self.infile} -> {self.outfile}. Removing all newly'
                                         f' generated files.')
@@ -299,6 +344,28 @@ class BaseConvert(object):
             if os.path.exists(filename):
                 os.remove(filename)
 
+    def _get_version(self):
+        """
+        Determines the version of Borealis that created the file
+
+        Returns
+        -------
+        versions: [int]
+            (major, minor[, patch]) version numbers
+        """
+        with h5py.File(self.infile, 'r') as f:
+            if 'metadata' in f.keys():
+                githash = f['metadata']['borealis_git_hash'][()]
+            else:
+                if 'borealis_git_hash' in f.attrs.keys():
+                    githash = f.attrs['borealis_git_hash']
+                else:
+                    rec = sorted(list(f.keys()))[0]
+                    githash = f[rec].attrs['borealis_git_hash']
+
+            version = [int(i) for i in githash.decode('utf-8').split('-')[0].lstrip('v').split('.')]
+        return version
+
     @classmethod
     def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
         """
@@ -317,3 +384,19 @@ class BaseConvert(object):
             of data for self.final_type.
         """
         return record
+
+    @classmethod
+    def _update_metadata(cls, record: OrderedDict, metadata: h5py.Group, **kwargs):
+        """
+        Adds in metadata fields required for this file type.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing one averaging period worth of data and metadata
+        metadata: h5py.Group
+            metadata group in the output file
+        kwargs: dict
+            any other arguments that may be required (e.g. 'averaging_method' for rawacf generation)
+        """
+        return

@@ -6,32 +6,43 @@ import postprocessors as pp
 from test.utils.compare_files import compare_files
 
 if __name__ == '__main__':
-    array_infile = 'bfiq.hdf5'
-    site_infile = 'bfiq.hdf5.site'
-    site_outfile = 'test_bfiq2rawacf.hdf5.site'
-    array_outfile = 'test_bfiq2rawacf.hdf5'
 
-    compare_site_file = 'rawacf.alt.hdf5.site'
-    compare_array_file = 'rawacf.alt.hdf5'
+    versions = [
+        "v0.5",
+        "v0.7",
+        "v1.0"
+    ]
 
-    # Convert from site file to both site and array files
-    pp.ConvertFile(site_infile, site_outfile, 'bfiq', 'rawacf', 'site', 'site')
-    compare_files(compare_site_file, site_outfile)
+    array_infile = '{}/bfiq.array'
+    site_infile = '{}/bfiq.site'
+    site_outfile = 'test_bfiq2rawacf.site'
+    array_outfile = 'test_bfiq2rawacf.array'
 
-    pp.ConvertFile(site_infile, array_outfile, 'bfiq', 'rawacf', 'site', 'array')
-    compare_files(compare_array_file, array_outfile)
+    compare_site_file = '{}/rawacf.site'
+    compare_array_file = '{}/rawacf.array'
 
-    # Remove the generated files
-    os.remove(site_outfile)
-    os.remove(array_outfile)
+    for version in versions:
+        print(version)
 
-    # Convert from array file to both site and array files
-    pp.ConvertFile(array_infile, site_outfile, 'bfiq', 'rawacf', 'array', 'site')
-    compare_files(compare_site_file, site_outfile)
+        if os.path.isfile(site_infile.format(version)):
+            # site -> site
+            pp.ConvertFile(site_infile.format(version), site_outfile, 'bfiq', 'rawacf', 'site', 'site')
+            compare_files(compare_site_file.format(version), site_outfile)
+            os.remove(site_outfile.format(version))
 
-    pp.ConvertFile(array_infile, array_outfile, 'bfiq', 'rawacf', 'array', 'array')
-    compare_files(compare_array_file, array_outfile)
+            if int(version[1]) == 0:
+                # site -> array
+                pp.ConvertFile(site_infile.format(version), array_outfile, 'bfiq', 'rawacf', 'site', 'array')
+                compare_files(compare_array_file.format(version), array_outfile)
+                os.remove(array_outfile.format(version))
 
-    # Remove the generate files
-    os.remove(site_outfile)
-    os.remove(array_outfile)
+        if os.path.isfile(array_infile.format(version)):
+            # array -> site
+            pp.ConvertFile(array_infile.format(version), site_outfile, 'bfiq', 'rawacf', 'array', 'site')
+            compare_files(compare_site_file.format(version), site_outfile)
+            os.remove(site_outfile.format(version))
+
+            # array -> array
+            pp.ConvertFile(array_infile.format(version), array_outfile, 'bfiq', 'rawacf', 'array', 'array')
+            compare_files(compare_array_file.format(version), array_outfile)
+            os.remove(array_outfile.format(version))

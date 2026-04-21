@@ -5,6 +5,7 @@ This file contains functions for converting antennas_iq files
 to rawacf files.
 """
 from collections import OrderedDict
+import h5py
 
 from postprocessors import BaseConvert, AntennasIQ2Bfiq, Bfiq2Rawacf
 
@@ -71,3 +72,21 @@ class AntennasIQ2Rawacf(AntennasIQ2Bfiq, Bfiq2Rawacf):
         record = super(AntennasIQ2Bfiq, cls).process_record(record, **kwargs)   # Calls Bfiq2Rawacf.process_record()
 
         return record
+
+    @classmethod
+    def _update_metadata(cls, record: OrderedDict, metadata: h5py.Group, **kwargs):
+        """
+        Takes a record from an antennas_iq file process into a rawacf record.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+
+        Returns
+        -------
+        record: OrderedDict
+            hdf5 record, with new fields required by rawacf data format
+        """
+        # Don't need the field `antenna_arrays` that is introduced by AntennasIQ2Bfiq._update_metadata method
+        super(AntennasIQ2Bfiq, cls)._update_metadata(record, metadata, **kwargs)  # Calls Bfiq2Rawacf's method

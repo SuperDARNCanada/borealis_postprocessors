@@ -16,7 +16,7 @@ from .core.antennas_iq_to_rawacf import AntennasIQ2Rawacf
 from .core.conversion import ConvertFile
 
 # Helpful for scripts
-from .utils.filename_conversions import borealis_to_sdarn_rename, borealis_to_borealis_rename
+from .utils.filename_conversions import b2sd_rename, b2b_rename
 
 # This stays minimal, up to user to import further for their usage
 from .sandbox import *

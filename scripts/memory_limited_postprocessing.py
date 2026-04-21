@@ -3,7 +3,7 @@ import glob
 import os
 from datetime import datetime
 
-from postprocessors import borealis_to_borealis_rename, Bfiq2Rawacf, AntennasIQ2Bfiq
+from postprocessors import b2b_rename, Bfiq2Rawacf, AntennasIQ2Bfiq
 
 
 def main(in_directory: str, out_directory: str, out_struct: str, search_pattern: str):
@@ -37,9 +37,9 @@ def main(in_directory: str, out_directory: str, out_struct: str, search_pattern:
 
         filename = os.path.basename(path)
 
-        bfiq_file = borealis_to_borealis_rename(filename, 'bfiq', 'site')
-        rawacf_site = borealis_to_borealis_rename(filename, 'rawacf', 'site')
-        rawacf_array = borealis_to_borealis_rename(filename, 'rawacf', 'array')
+        bfiq_file = b2b_rename(filename, 'bfiq', 'site')
+        rawacf_site = b2b_rename(filename, 'rawacf', 'site')
+        rawacf_array = b2b_rename(filename, 'rawacf', 'array')
 
         bfiq_path = f'{out_directory}/{bfiq_file}'
         rawacf_site_path = f'{out_directory}/{rawacf_site}'

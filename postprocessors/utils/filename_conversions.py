@@ -6,7 +6,7 @@ restructured file.
 """
 
 
-def borealis_to_borealis_rename(filename, new_type, new_structure):
+def b2b_rename(filename, new_type, new_structure):
     """
     Returns a typical Borealis-formatted filename with the new type and structure.
     Typical Borealis-formatted filenames are YYYYMMDD.HHMM.SS.radar_id.slice_num.type.hdf5[.site]
@@ -31,17 +31,18 @@ def borealis_to_borealis_rename(filename, new_type, new_structure):
         Newly formatted Borealis filename
     """
     fields = filename.split(".")
-    if new_structure == 'site' and fields[-1] != 'site':
-        fields.append('site')
-    elif new_structure == 'array' and fields[-1] != 'hdf5':
-        fields.pop(-1)
+    if fields[-1] != "h5":
+        if new_structure == 'site' and fields[-1] != 'site':
+            fields.append('site')
+        elif new_structure == 'array' and fields[-1] != 'hdf5':
+            fields.pop(-1)
 
     new_name = '.'.join(fields[0:5] + [new_type] + fields[6:])
 
     return new_name
 
 
-def borealis_to_sdarn_rename(filename, new_type):
+def b2sd_rename(filename, new_type):
     """
     Returns a typical SuperDARN-formatted filename with the new type and structure.
     Typical Borealis-formatted filenames are YYYYMMDD.HHMM.SS.radar_id.slice_num.type.hdf5[.site]
