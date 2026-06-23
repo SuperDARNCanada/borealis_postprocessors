@@ -21,72 +21,6 @@ from postprocessors import conversion_exceptions
 import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
-# def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, processing_fn,
-#                        infile_type: str, outfile_type: str, version: tuple, **kwargs):
-#     """
-#     Helper function for processing a single record. It is defined here to facilitate multiprocessing.
-#
-#         Number of records to process per call to this function.
-#     processing_fn: callable
-#         Function to call to process a record.
-#     infile_type: str
-#         File type that is being processed. One of 'antennas_iq', 'bfiq', or 'rawacf'.
-#     outfile_type: str
-#         Resulting file type. One of 'antennas_iq', 'bfiq', or 'rawacf'.
-#     version: tuple
-#         Version numbers of the record. (major, minor[, patch])
-#     kwargs: dict
-#         Key-word arguments to pass to processing_fn
-#
-#     Returns
-#     -------
-#     formatted_record, idx: properly-formatted processed record and the index which was processed.
-#     """
-#     with h5py.File(filename, 'r') as hdf5_file:
-#         metadata = copy.deepcopy(kwargs.get("metadata", dict()))
-#         record_dict = rs.read_group(hdf5_file[record_keys[idx]], infile_type, no_dim_scales=kwargs.get("dmap", False))
-#         record_dict['descriptions'].update(metadata.pop('descriptions'))
-#         record_dict['units'].update(metadata.pop('units'))
-#         if not kwargs.get("dmap", False):
-#             record_dict['dim_labels'].update(metadata.pop('dim_labels'))
-#             record_dict['dim_scales'].update(metadata.pop('dim_scales'))
-#             record_dict['dim_nicknames'].update(metadata.pop('dim_nicknames'))
-#         record_dict.update(metadata)
-#         record_list = []  # List of all 'extra' records to process
-#
-#         # If processing multiple records at a time, get all the records ready
-#         if records_per_process > 1:
-#             for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
-#                 if version[0] > 0:
-#                     record_list.append(hdf5_file[record_keys[num]])
-#                 else:
-#                     extra_rec = rs.read_group(hdf5_file[record_keys[num]], infile_type, no_dim_scales=kwargs.get("dmap", False))
-#                     if not kwargs.get("dmap", False):
-#                         extra_rec.update(metadata)
-#                     record_list.append(extra_rec)
-#
-#     processed_record = processing_fn(record_dict, extra_records=record_list, **kwargs)
-#
-#     if processed_record is None:
-#         return None, idx
-#
-#     # Convert to numpy arrays for saving to file
-#     formatted_record = rs.convert_to_numpy(processed_record, version=version)
-#
-#     if kwargs.get("dmap", None):
-#         if outfile_type == 'rawacf':
-#             convert_fn = pydarnio.BorealisV1Convert.convert_rawacf_record
-#             dmap_fn = pydarnio.write_rawacf
-#         elif outfile_type == 'bfiq':
-#             convert_fn = pydarnio.BorealisV1Convert.convert_bfiq_record
-#             dmap_fn = pydarnio.write_iqdat
-#         else:
-#             raise RuntimeError("Unable to convert record to DMAP")
-#         dmap_record = convert_fn(processed_record, metadata, filename)
-#         dmap_bytes = dmap_fn(dmap_record)
-#         return dmap_bytes, idx
-#     else:
-#         return formatted_record, idx
 
 def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, record_indices: list, processing_fn,
                        infile_type: str, outfile_type: str, version: tuple, **kwargs):
@@ -315,7 +249,6 @@ class BaseConvert(object):
             if choice[0] not in ['y', 'Y']:
                 return 0
 
-        version = self._get_version()
         try:
             if (self.infile_structure == 'dmap') and (self.infile_type == 'rawacf'):  # Dmap input
                 self.dmap_to_dmap(self.infile, self.outfile, **kwargs)
