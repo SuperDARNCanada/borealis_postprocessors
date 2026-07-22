@@ -10,6 +10,8 @@ from collections import OrderedDict
 import h5py
 from functools import partial
 from multiprocessing import get_context
+import datetime as dt
+from datetime import timezone
 import pydarnio
 from tqdm import tqdm
 
@@ -20,7 +22,7 @@ import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
 
-def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, processing_fn,
+def processing_machine(idx: int, filename: str, record_keys: list, records_per_process: int, record_indices: list, processing_fn,
                        infile_type: str, outfile_type: str, version: tuple, **kwargs):
     """
     Helper function for processing a single record. It is defined here to facilitate multiprocessing.
@@ -28,13 +30,15 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
     Parameters
     ----------
     idx: int
-        Index into record_keys which tells processing_machine() which record to process
+        int: Index into record_keys or `record_indices` which tells processing_machine() which record(s) to process
     filename: str
         HDF5 file with records to process.
     record_keys: list
         List of all top-level keys of the HDF5 file.
     records_per_process: int
         Number of records to process per call to this function.
+    record_indices: list
+        List of record indice groups to process.
     processing_fn: callable
         Function to call to process a record.
     infile_type: str
@@ -48,8 +52,17 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
 
     Returns
     -------
-    formatted_record, idx: properly-formatted processed record and the index which was processed.
+    formatted_record, idx: properly-formatted processed record and the index which was processed or the first index of
+                           record_indices group.
     """
+    if "metadata" not in kwargs:
+        # metadata = rs.read_group(kwargs["metadata"], infile_type)
+    # else:
+        metadata = dict()  # This is purely to avoid a bunch of if statements later checking if "metadata" in kwargs
+    index = idx
+    if len(record_indices) != 0: #Check if record_list is to be used or not
+        idx = record_indices[index][0]
+        final_idx = record_indices[index][1]
     with h5py.File(filename, 'r') as hdf5_file:
         metadata = copy.deepcopy(kwargs.get("metadata", dict()))
         record_dict = rs.read_group(hdf5_file[record_keys[idx]], infile_type, no_dim_scales=kwargs.get("dmap", False))
@@ -63,6 +76,16 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         record_list = []  # List of all 'extra' records to process
 
         # If processing multiple records at a time, get all the records ready
+        if len(record_indices) != 0:
+            for num in range(idx + 1, final_idx + 1):
+                if version[0] > 0:
+                    extra_rec = rs.read_group(hdf5_file[record_keys[num]], infile_type)
+                    extra_rec.update(metadata)
+                    record_list.append(extra_rec)
+                else:
+                    extra_rec = rs.read_group(hdf5_file[record_keys[num]], infile_type)
+                    extra_rec.update(metadata)
+                    record_list.append(extra_rec)
         if records_per_process > 1:
             for num in range(idx + 1, min(idx + records_per_process, len(record_keys))):
                 if version[0] > 0:
@@ -73,7 +96,7 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
                         extra_rec.update(metadata)
                     record_list.append(extra_rec)
 
-    processed_record = processing_fn(record_dict, extra_records=record_list, **kwargs)
+    processed_record = processing_fn(record_dict, extra_records=record_list, rec_indices=index, **kwargs)
 
     if processed_record is None:
         return None, idx
@@ -94,6 +117,13 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         dmap_bytes = dmap_fn(dmap_record)
         return dmap_bytes, idx
     else:
+        # Convert to numpy arrays for saving to file
+        if isinstance(processed_record, list):  # if processed_record is a list of many records
+            formatted_record = []
+            for rec in processed_record:
+                formatted_record.append(rs.convert_to_numpy(rec, version=version))
+        else:
+            formatted_record = rs.convert_to_numpy(processed_record, version=version)
         return formatted_record, idx
 
 
@@ -188,7 +218,7 @@ class BaseConvert(object):
                 f'"{self.outfile_type}": Valid structures for {self.outfile_type} are '
                 f'{rs.FILE_STRUCTURE_MAPPING[self.outfile_type]}'
             )
-        if self.infile_structure not in ['array', 'site']:
+        if self.infile_structure not in ['array', 'site', 'dmap']:
             raise conversion_exceptions.ConversionUpstreamError(
                 f'Input file structure "{self.infile_structure}" cannot be reprocessed into any other format.'
             )
@@ -208,6 +238,7 @@ class BaseConvert(object):
             Supported kwargs include:
                 force: bool, if True will overwrite an existing output file
                 avg_num: int, how many records are grouped together for a single process_record() call
+                record_list: list of tuples, where each tuple represents a start and end indice for a group of records to process at a time
                 num_processes: int, how many CPU cores to distribute the job across
                 keep_intermediate_files: bool, if True all intermediate files are not discarded
             Other kwargs may be supported by child classes and will be passed through to the process_record() function.
@@ -218,8 +249,11 @@ class BaseConvert(object):
             if choice[0] not in ['y', 'Y']:
                 return 0
 
-        version = self._get_version()
         try:
+            if (self.infile_structure == 'dmap') and (self.infile_type == 'rawacf'):  # Dmap input
+                self.dmap_to_dmap(self.infile, self.outfile, **kwargs)
+                return
+            version = self._get_version()
             # Restructure to 'site' format if necessary
             if self.infile_structure != 'site':
                 if version[0] >= 1:
@@ -263,6 +297,8 @@ class BaseConvert(object):
                     all_records.remove("metadata")
 
             records_per_process = kwargs.get('avg_num', 1)      # Records getting averaged together.
+            record_list = kwargs.get('record_list', [])         # list of start indices and end indices of what records to process
+
             if not kwargs.get('force', False):      # file may be partially processed, only process remaining records
                 final_records_remaining = sorted(list(
                     set(all_records[::records_per_process]).difference(finished_records)))
@@ -270,18 +306,39 @@ class BaseConvert(object):
                 final_records_remaining = all_records[::records_per_process]
 
             first_idx = all_records.index(final_records_remaining[0])   # first record to process
-            indices = range(first_idx, len(all_records), records_per_process)
+            if len(record_list) == 0:
+                num_to_process = round(len(all_records) / records_per_process)
+                indices = range(first_idx, len(all_records), records_per_process)
+            else:  # if we are processing based off user input on certain section of the file
+                num_to_process = int(len(record_list) / records_per_process)
+                indices = range(0, len(record_list))
+            num_completed = first_idx
 
             dmap_flag = self.outfile_structure in ('dmap', 'iqdat')
             if dmap_flag:
                 dmap_outfile = open(self.outfile, 'ab')
-
+            
             # Do the processing on each record
-            with h5py.File(processed_file, 'a') as outfile:
+            with (h5py.File(processed_file, 'a') as outfile):
                 def append_to_file(rec, idx):
                     """Convenience function to append to file"""
                     if rec is not None:
-                        rs.write_records(outfile, {all_records[idx]: rec}, version=version)
+                        if isinstance(rec, list):  # If rec is a list of records
+                            rs.write_records(outfile, {all_records[idx + i]: r for i, r in enumerate(rec)}, version=version)
+                        else:
+                            new_rec_name = all_records[idx]  # Default Record Name
+                            if version[0] > 0:
+                                sqn_timestamp = xp.around(rec['sqn_timestamps'][0], 3)  # First timestamp in record
+                                old_rec_name = dt.datetime.strptime(all_records[idx], "%Y%m%d-%H%M-%S.%f")
+                                old_rec_name = old_rec_name.replace(tzinfo=timezone.utc).timestamp()
+                                if old_rec_name != sqn_timestamp:
+                                    new_rec_name = dt.datetime.utcfromtimestamp(sqn_timestamp).strftime("%Y%m%d-%H%M-%S.%f")
+                            else:
+                                sqn_timestamp = xp.trunc(rec['sqn_timestamps'][0] * 10 ** 3) / 10 ** 3  # First timestamp in record
+                                old_rec_name = int(all_records[idx])/1000
+                                if old_rec_name != sqn_timestamp:
+                                    new_rec_name = str(int(sqn_timestamp*1000))
+                            rs.write_records(outfile, {new_rec_name: rec}, version=version)
 
                 # Add the metadata to outfile first
                 if version[0] >= 1:
@@ -295,7 +352,7 @@ class BaseConvert(object):
 
                 function_to_call = partial(processing_machine,
                                            filename=file_to_process, record_keys=all_records,
-                                           records_per_process=records_per_process,
+                                           records_per_process=records_per_process, record_indices=record_list,
                                            processing_fn=self.process_record, infile_type=self.infile_type,
                                            outfile_type=self.outfile_type,
                                            version=version, dmap=dmap_flag,
