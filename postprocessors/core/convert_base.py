@@ -14,6 +14,13 @@ import datetime as dt
 from datetime import timezone
 import pydarnio
 from tqdm import tqdm
+try:
+    import cupy as xp
+except ImportError:
+    import numpy as xp
+    cupy_available = False
+else:
+    cupy_available = True
 
 import postprocessors.core.restructure as rs
 from postprocessors import conversion_exceptions
@@ -66,13 +73,14 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
     with h5py.File(filename, 'r') as hdf5_file:
         metadata = copy.deepcopy(kwargs.get("metadata", dict()))
         record_dict = rs.read_group(hdf5_file[record_keys[idx]], infile_type, no_dim_scales=kwargs.get("dmap", False))
-        record_dict['descriptions'].update(metadata.pop('descriptions'))
-        record_dict['units'].update(metadata.pop('units'))
-        if not kwargs.get("dmap", False):
-            record_dict['dim_labels'].update(metadata.pop('dim_labels'))
-            record_dict['dim_scales'].update(metadata.pop('dim_scales'))
-            record_dict['dim_nicknames'].update(metadata.pop('dim_nicknames'))
-        record_dict.update(metadata)
+        if "descriptions" in record_dict:
+            record_dict['descriptions'].update(metadata.pop('descriptions'))
+            record_dict['units'].update(metadata.pop('units'))
+            if not kwargs.get("dmap", False):
+                record_dict['dim_labels'].update(metadata.pop('dim_labels'))
+                record_dict['dim_scales'].update(metadata.pop('dim_scales'))
+                record_dict['dim_nicknames'].update(metadata.pop('dim_nicknames'))
+            record_dict.update(metadata)
         record_list = []  # List of all 'extra' records to process
 
         # If processing multiple records at a time, get all the records ready
@@ -102,8 +110,6 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         return None, idx
 
     # Convert to numpy arrays for saving to file
-    formatted_record = rs.convert_to_numpy(processed_record, version=version)
-
     if kwargs.get("dmap", None):
         if outfile_type == 'rawacf':
             convert_fn = pydarnio.BorealisV1Convert.convert_rawacf_record
@@ -113,8 +119,14 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
             dmap_fn = pydarnio.write_iqdat
         else:
             raise RuntimeError("Unable to convert record to DMAP")
-        dmap_record = convert_fn(processed_record, metadata, filename)
-        dmap_bytes = dmap_fn(dmap_record)
+        if isinstance(processed_record, list):  # if processed_record is a list of many records
+            dmap_bytes = []
+            for rec in processed_record:
+                dmap_record = convert_fn(rec, metadata, filename)
+                dmap_bytes.append(dmap_fn(dmap_record))
+        else:
+            dmap_record = convert_fn(processed_record, metadata, filename)
+            dmap_bytes = dmap_fn(dmap_record)
         return dmap_bytes, idx
     else:
         # Convert to numpy arrays for saving to file
@@ -314,14 +326,14 @@ class BaseConvert(object):
                 indices = range(0, len(record_list))
             num_completed = first_idx
 
-            dmap_flag = self.outfile_structure in ('dmap', 'iqdat')
+            dmap_flag = self.outfile_structure in ('dmap', 'iqdat') and version[0] >= 1
             if dmap_flag:
                 dmap_outfile = open(self.outfile, 'ab')
             
             # Do the processing on each record
             with (h5py.File(processed_file, 'a') as outfile):
                 def append_to_file(rec, idx):
-                    """Convenience function to append to file"""
+                    """Convenience function to append to file for non dmap flagged processing"""
                     if rec is not None:
                         if isinstance(rec, list):  # If rec is a list of records
                             rs.write_records(outfile, {all_records[idx + i]: r for i, r in enumerate(rec)}, version=version)
@@ -340,6 +352,14 @@ class BaseConvert(object):
                                     new_rec_name = str(int(sqn_timestamp*1000))
                             rs.write_records(outfile, {new_rec_name: rec}, version=version)
 
+                def append_to_file_dmap(rec):
+                    """Convenience function to append to file for dmap conversion when dmap_flag is true"""
+                    if rec is not None:
+                        if isinstance(rec, list):  # If rec is a list of records, append one after the other
+                            for completed_record in rec:
+                                dmap_outfile.write(completed_record)
+                        else:
+                            dmap_outfile.write(rec)
                 # Add the metadata to outfile first
                 if version[0] >= 1:
                     with h5py.File(file_to_process, 'r') as infile:
@@ -363,14 +383,14 @@ class BaseConvert(object):
                     with get_context("spawn").Pool(num_processes) as p:
                         for completed_record, i in tqdm(p.imap(function_to_call, indices), total=len(indices)):
                             if dmap_flag:
-                                dmap_outfile.write(completed_record)
+                                append_to_file_dmap(completed_record)
                             else:
                                 append_to_file(completed_record, i)
                 else:   # Default single-worker
                     for idx in tqdm(indices):
                         completed_record, i = function_to_call(idx)
                         if dmap_flag:
-                            dmap_outfile.write(completed_record)
+                            append_to_file_dmap(completed_record)
                         else:
                             append_to_file(completed_record, i)
                 # print('\r', flush=True, end='')     # Remove the progress bar

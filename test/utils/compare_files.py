@@ -50,7 +50,7 @@ def compare_files(file1, file2):
                                                    f"\t{entry1}\n" \
                                                    f"\t{entry2}\n" \
                                                    f"\tDifference: " \
-                                                   f"{np.nanmax(np.abs((entry1[()] - entry2[()])/entry1[:]))}\n"
+                                                   f"{np.nanmax(np.abs((entry1[()].flatten() - entry2[()].flatten())/entry1[:].flatten()))}\n"
                 # Comparing non-floating-point values
                 elif not np.array_equal(entry1, entry2):
                     compare_string += prefix + f"/{key}:\n" \

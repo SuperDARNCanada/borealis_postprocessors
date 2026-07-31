@@ -8,6 +8,7 @@ import numpy as np
 from postprocessors import BaseConvert
 import h5py
 from postprocessors.core.antennas_iq_to_rawacf import AntennasIQ2Rawacf
+from postprocessors import AntennasIQ2Bfiq
 import logging
 
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
@@ -202,4 +203,19 @@ class RawacfAvg(BaseConvert):
         #  Convert the AntennasIQ record to Rawacf
         record = AntennasIQ2Rawacf.process_record(record, **kwargs)
         return record
+    @classmethod
+    def _update_metadata(cls, record: OrderedDict, metadata: h5py.Group, **kwargs):
+        """
+        Adds in metadata fields required for this file type.
 
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing one averaging period worth of data and metadata
+        metadata: h5py.Group
+            metadata group in the output file
+
+        """
+        averaging_method = kwargs.get("averaging_method", "mean")
+        dset = metadata.create_dataset("averaging_method", data=averaging_method)
+        dset.attrs["description"] = "Averaging method, e.g. mean, median"
