@@ -3,6 +3,7 @@
 """
 This file contains functions for averaging multiple records of a rawacf file.
 """
+import copy
 from collections import OrderedDict
 from typing import Union
 import numpy as np
@@ -115,3 +116,59 @@ class AverageMultipleRawacfRecords(BaseConvert):
         record['noise_at_freq'] = noise_at_freq
 
         return record
+
+    @staticmethod
+    def process_record_dmap(record: OrderedDict, averaging_method: Union[None, str] = 'mean', **kwargs) -> OrderedDict:
+        """
+        Takes a record from a rawacf file and averages a specified number of adjacent records together.
+
+        Parameters
+        ----------
+        record: OrderedDict
+            hdf5 record containing antennas_iq data and metadata
+        averaging_method: Union[None, str]
+            Method to use for averaging correlations across sequences. For this class, only 'mean' averaging is
+            supported, as the median cannot be taken across multiple records after rawacf files have been made.
+        kwargs:
+            Supported key: 'extra_records'
+            'extra_records' should be a list of OrderedDicts, which are the records to average.
+        Returns
+        -------
+        record: OrderedDict
+            hdf5 record
+        """
+        if 'extra_records' not in kwargs:
+            print("No extra records given.")
+            return record
+        copy_record = copy.deepcopy(record)
+        for i, rec in  enumerate(record):
+            total_sequences = rec['nave']
+            # sqn_timestamps = list(rec['sqn_timestamps'])
+            int_timesc = rec['intt.sc']
+            int_timeus = rec['intt.us']
+            noise_at_freq = list([rec['noise.search']])
+            main_acfs = rec['acfd'] * total_sequences
+            xcfs = rec['xcfd'] * total_sequences
+
+            for group in kwargs['extra_records']:
+                rec_2_add = group[i]
+                num_sequences = rec_2_add['nave']
+                total_sequences += num_sequences
+                int_timesc += rec_2_add['intt.sc']
+                int_timeus += rec_2_add['intt.us']
+                noise_at_freq.extend([rec_2_add['noise.search']])
+                # sqn_timestamps.extend(list(rec_2_add['sqn_timestamps']))
+                main_acfs += rec_2_add['acfd'] * num_sequences
+                xcfs += rec_2_add['xcfd'] * num_sequences
+
+            main_acfs /= total_sequences
+            xcfs /= total_sequences
+
+            copy_record[i]['acfd'] = main_acfs
+            copy_record[i]['xcfd'] = xcfs
+            copy_record[i]['intt.sc'] = int(int_timesc + int_timeus//1e6)
+            copy_record[i]['intt.us'] = int((int_timeus/1e6 - int_timeus//1e6)*1e6)
+            copy_record[i]['nave'] = total_sequences
+            copy_record[i]['noise.search'] = np.mean(noise_at_freq)
+        return copy_record
+        # return record

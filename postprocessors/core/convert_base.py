@@ -25,6 +25,7 @@ else:
 import postprocessors.core.restructure as rs
 from postprocessors import conversion_exceptions
 
+
 import logging
 postprocessing_logger = logging.getLogger('borealis_postprocessing')
 
@@ -137,6 +138,83 @@ def processing_machine(idx: int, filename: str, record_keys: list, records_per_p
         else:
             formatted_record = rs.convert_to_numpy(processed_record, version=version)
         return formatted_record, idx
+
+def processing_machine_dmap(idx: int, filename: str, records: list, records_per_process: int, record_indices: list, processing_fn,
+                       infile_type: str, outfile_type: str, **kwargs):
+    """
+    Helper function for processing a single record. It is defined here to facilitate multiprocessing.
+
+    Parameters
+    ----------
+    idx: int
+        int: Index into record_keys or `record_indices` which tells processing_machine() which record(s) to process
+    filename: str
+        DMAP file with records to process.
+    records: list
+        List of all records of the DMAP file.
+    records_per_process: int
+        Number of records to process per call to this function.
+    record_indices: list
+        List of record indice groups to process.
+    processing_fn: callable
+        Function to call to process a record.
+    infile_type: str
+        File type that is being processed. One of 'antennas_iq', 'bfiq', or 'rawacf'.
+    outfile_type: str
+        Resulting file type. One of 'antennas_iq', 'bfiq', or 'rawacf'.
+    kwargs: dict
+        Key-word arguments to pass to processing_fn
+
+    Returns
+    -------
+    formatted_record, idx: properly-formatted processed record and the index which was processed or the first index of
+                           record_indices group.
+    """
+    if "metadata" not in kwargs:
+        # metadata = rs.read_group(kwargs["metadata"], infile_type)
+    # else:
+        metadata = dict()  # This is purely to avoid a bunch of if statements later checking if "metadata" in kwargs
+    index = idx
+    if len(record_indices) != 0: #Check if record_list is to be used or not
+        idx = record_indices[index][0]
+        final_idx = record_indices[index][1]
+
+    record_dict = records[index]
+    record_list = []  # List of all 'extra' records to process
+
+    # If processing multiple records at a time, get all the records ready
+    if len(record_indices) != 0:
+        for num in range(idx + 1, final_idx + 1):
+            extra_rec = records[num]
+            extra_rec.update(metadata)
+            record_list.append(extra_rec)
+
+    if records_per_process > 1:
+        for num in range(idx + 1, min(idx + records_per_process, len(records))):
+            record_list.append(records[num])
+
+    processed_record = processing_fn(record_dict, extra_records=record_list, rec_indices=index, **kwargs)
+
+    if processed_record is None:
+        return None, idx
+
+    # Convert to numpy arrays for saving to file
+    if kwargs.get("dmap", None):
+        if outfile_type == 'rawacf':
+            convert_fn = pydarnio.BorealisV1Convert.convert_rawacf_record
+            dmap_fn = pydarnio.write_rawacf
+        elif outfile_type == 'bfiq':
+            convert_fn = pydarnio.BorealisV1Convert.convert_bfiq_record
+            dmap_fn = pydarnio.write_iqdat
+        else:
+            raise RuntimeError("Unable to convert record to DMAP")
+        if isinstance(processed_record, list):  # if processed_record is a list of many records
+            dmap_bytes = []
+            for rec in processed_record:
+                dmap_bytes.append(dmap_fn([rec]))
+        else:
+            dmap_bytes = dmap_fn(processed_record)
+        return dmap_bytes, idx
 
 
 class BaseConvert(object):
@@ -263,7 +341,7 @@ class BaseConvert(object):
 
         try:
             if (self.infile_structure == 'dmap') and (self.infile_type == 'rawacf'):  # Dmap input
-                self.dmap_to_dmap(self.infile, self.outfile, **kwargs)
+                self.process_dmap_file(**kwargs)
                 return
             version = self._get_version()
             # Restructure to 'site' format if necessary
@@ -413,6 +491,128 @@ class BaseConvert(object):
             else:
                 self._remove_temp_files()
 
+    def process_dmap_file(self, **kwargs):
+        """
+        Applies appropriate downstream processing to convert between file types (for dmap
+        files only). The processing chain is as follows:
+        2. Apply appropriate downstream processing by calling process_record() on each record
+        3. Restructure to final format
+        4. Remove all intermediate files created along the way
+
+        Parameters
+        ----------
+        **kwargs: dict
+            Supported kwargs include:
+                force: bool, if True will overwrite an existing output file
+                avg_num: int, how many records are grouped together for a single process_record() call
+                record_list: list of tuples, where each tuple represents a start and end indice for a group of records to process at a time
+                num_processes: int, how many CPU cores to distribute the job across
+                keep_intermediate_files: bool, if True all intermediate files are not discarded
+            Other kwargs may be supported by child classes and will be passed through to the process_record() function.
+        """
+        if os.path.isfile(self.outfile) and not kwargs.get('force', False):
+            choice = input(f'Output file {self.outfile} already exists. Proceed anyway? Only records which don\'t '
+                           f'exist in output file will be processed. (y/n): ')
+            if choice[0] not in ['y', 'Y']:
+                return 0
+
+        try:
+            if (self.__class__.__name__ == "Widebeam2NormalScan"):
+                self.dmap_to_dmap(self.infile, self.outfile, **kwargs)  # Requires the whole file, not typical process format
+                return
+            file_to_process = self.infile
+
+            # Prepare to restructure after processing, if necessary
+            if self.outfile_structure != 'dmap':
+                raise ValueError("dmap structured files cannot be converted to any other type")
+            processed_file = self.outfile
+
+            postprocessing_logger.info(f'Converting file {file_to_process} --> {processed_file}')
+
+            # First we want to check if any records have all been done, to lighten our workload
+            finished_records = set()
+            if os.path.isfile(processed_file) and not kwargs.get('force', False):
+                finished_data = pydarnio.read_rawacf(processed_file, mode="strict")
+                finished_records = set(range(len(data)))
+
+            # Load record names from file
+            all_records = pydarnio.read_rawacf(file_to_process, mode="strict")
+            records_per_process = kwargs.get('avg_num', 1)  # Records getting averaged together.
+            record_list = kwargs.get('record_list',
+                                     [])  # list of start indices and end indices of what records to process
+            #Check if widebeam mode
+            command_mode = pydarnio.read_rawacf(file_to_process, mode="metadata")[0]['origin.command'][-7:]
+            if command_mode == "FullFOV":
+                all_records=self._group_wide_recs(all_records)
+                first_idx = 0
+                if len(record_list) == 0:
+                    num_to_process = round(len(all_records) / records_per_process)
+                    indices = range(first_idx, len(all_records), records_per_process)
+                else:  # if we are processing based off user input on certain section of the file
+                    num_to_process = int(len(record_list) / records_per_process)
+                    indices = range(0, len(record_list))
+                num_completed = first_idx
+            else:
+                if not kwargs.get('force', False):  # file may be partially processed, only process remaining records
+                    final_records_remaining = sorted(list(
+                        set(all_records[::records_per_process]).difference(finished_records)))
+                else:
+                    final_records_remaining = all_records[::records_per_process]
+
+                first_idx = all_records.index(final_records_remaining[0])  # first record to process
+                if len(record_list) == 0:
+                    num_to_process = round(len(all_records) / records_per_process)
+                    indices = range(first_idx, len(all_records), records_per_process)
+                else:  # if we are processing based off user input on certain section of the file
+                    num_to_process = int(len(record_list) / records_per_process)
+                    indices = range(0, len(record_list))
+                num_completed = first_idx
+
+
+            dmap_outfile = open(self.outfile, 'ab')
+            # Do the processing on each record
+
+            def append_to_file_dmap(rec):
+                """Convenience function to append to file for dmap conversion when dmap_flag is true"""
+                if rec is not None:
+                    if isinstance(rec, list):  # If rec is a list of records, append one after the other
+                        for completed_record in rec:
+                            dmap_outfile.write(completed_record)
+                    else:
+                        dmap_outfile.write(rec)
+
+            function_to_call = partial(processing_machine_dmap,
+                                       filename=file_to_process, record_keys=all_records,
+                                       records_per_process=records_per_process, record_indices=record_list,
+                                       processing_fn=self.process_record_dmap, infile_type=self.infile_type,
+                                       outfile_type=self.outfile_type, dmap=True,
+                                       **kwargs)
+
+            num_processes = kwargs.get("num_processes", 1)
+            if num_processes > 1:  # Use multiprocessing if specified
+                with get_context("spawn").Pool(num_processes) as p:
+                    for completed_record, i in tqdm(p.imap(function_to_call, indices), total=len(indices)):
+                        append_to_file_dmap(completed_record)
+
+            else:  # Default single-worker
+                for idx in tqdm(indices):
+                    completed_record, i = function_to_call(idx)
+                    append_to_file_dmap(completed_record)
+
+                # print('\r', flush=True, end='')     # Remove the progress bar
+
+        except (Exception,) as e:
+            postprocessing_logger.error(f'Could not process file {self.infile} -> {self.outfile}. Removing all newly'
+                                        f' generated files.')
+            postprocessing_logger.error(e)
+            postprocessing_logger.error(traceback.print_exc())
+            raise e
+        finally:
+            if kwargs.get('keep_intermediate_files', False):
+                self._temp_files = []
+            else:
+                self._remove_temp_files()
+
     def _remove_temp_files(self):
         """
         Deletes all temporary files used in the processing chain.
@@ -442,6 +642,40 @@ class BaseConvert(object):
 
             version = [int(i) for i in githash.decode('utf-8').split('-')[0].lstrip('v').split('.')]
         return version
+
+    def _group_wide_recs(self, recs):
+        def get_timestamp(rec: dict) -> dt.datetime:
+            """Builds a datetime object from the metadata of the DMAP record"""
+            timestamp = dt.datetime(
+                rec['time.yr'],
+                rec['time.mo'],
+                rec['time.dy'],
+                rec['time.hr'],
+                rec['time.mt'],
+                rec['time.sc'],
+                rec['time.us'],
+                tzinfo=dt.timezone.utc,
+            )
+            return timestamp
+
+        grouped_records = []
+
+        rec_timestamps = list()
+        timestamps = set()
+        for rec in recs:  # Find the record names
+            tstamp = get_timestamp(rec)
+            rec_timestamps.append(tstamp)
+            timestamps.add(tstamp)
+        timestamps = sorted(list(timestamps))
+
+        for tstamp in timestamps:  # group all records with identical timestamps
+            concurrent_recs = []
+            for i, rec_tstamp in enumerate(rec_timestamps):
+                if rec_tstamp == tstamp:
+                    concurrent_recs.append(recs[i])
+            grouped_records.append(concurrent_recs)
+        return grouped_records
+
 
     @classmethod
     def process_record(cls, record: OrderedDict, **kwargs) -> OrderedDict:
