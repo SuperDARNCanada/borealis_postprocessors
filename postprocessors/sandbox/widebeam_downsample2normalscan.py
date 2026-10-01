@@ -188,3 +188,39 @@ class Widebeam2NormalScan(BaseConvert):
             recs_kept.append(rec)
         
         pydarnio.write_rawacf(recs_kept, processed_file)
+
+    @staticmethod
+    def process_record_dmap(record:OrderedDict, **kwargs) -> OrderedDict:
+        """
+        1. For each group of records, determine which beam should be saved
+        2. Save the associated beam and remove the others
+        3. Update the scan marker
+
+        Parameters
+        ----------
+        record: list[OrderedDict]
+            dmap list of record containing rawacf data and metadata for beam 0
+        extra_records: list
+            list of the next 15 records after record
+        Returns
+        -------
+        record: list[OrderedDict]
+            list of 16 records, each downsampled to one beam
+        """
+        num_beams = kwargs.get('timestamps', None)[1]
+        extra_records = kwargs.get('extra_records', None)
+
+        beam_to_keep = 0
+        recs_kept = []
+        grouped_records = []
+        grouped_records += [record] + extra_records
+
+        for concurrent_recs in grouped_records:
+            rec = concurrent_recs[beam_to_keep]
+            rec['scan'] = np.int16(beam_to_keep == 0)
+            beam_to_keep += 1
+            if beam_to_keep >= num_beams:
+                beam_to_keep = 0
+            recs_kept.append(rec)
+
+        return recs_kept
